@@ -191,37 +191,33 @@ if data_dict:
     with col2:
         fecha_llegada_nueva = st.date_input("Fecha Llegada", value=fecha_llegada_actual if pd.notna(fecha_llegada_actual) else None)
 
-       # Sitio Almacenaje
-opciones_sitio = ["Congelador 1", "Congelador 2", "Frigorífico", "Tª Ambiente"]
-sitio_principal = sitio_almacenaje_actual.split(
-    " - ")[0] if " - " in sitio_almacenaje_actual else sitio_almacenaje_actual
-if sitio_principal not in opciones_sitio:
-    sitio_principal = opciones_sitio[0]
-sitio_top = st.selectbox("Sitio de Almacenaje", opciones_sitio,
-                         index=opciones_sitio.index(sitio_principal))
+        # Sitio Almacenaje
+        opciones_sitio = ["Congelador 1", "Congelador 2", "Frigorífico", "Tª Ambiente"]
+        sitio_principal = sitio_almacenaje_actual.split(" - ")[0] if " - " in sitio_almacenaje_actual else sitio_almacenaje_actual
+        if sitio_principal not in opciones_sitio:
+            sitio_principal = opciones_sitio[0]
+        sitio_top = st.selectbox("Sitio de Almacenaje", opciones_sitio, index=opciones_sitio.index(sitio_principal))
 
-subopcion = ""
-if sitio_top == "Congelador 1":
-    cajones = [f"Cajón {i}" for i in range(1, 9)]
-    subopcion = st.selectbox("Cajón (1 Arriba, 8 Abajo)", cajones)
-elif sitio_top == "Congelador 2":
-    cajones = [f"Cajón {i}" for i in range(1, 7)]
-    subopcion = st.selectbox("Cajón (1 Arriba, 6 Abajo)", cajones)
-elif sitio_top == "Frigorífico":
-    baldas = [f"Balda {i}" for i in range(1, 8)] + ["Puerta"]
-    subopcion = st.selectbox("Baldas (1 Arriba, 7 Abajo)", baldas)
-elif sitio_top == "Tª Ambiente":
-    # Nuevo caso: al elegir Tª Ambiente, mostramos un text_input para un comentario
-    comentario = st.text_input("Comentario (opcional)")
-    # Usamos "subopcion" para almacenar el texto
-    subopcion = comentario.strip()
+        subopcion = ""
+        if sitio_top == "Congelador 1":
+            cajones = [f"Cajón {i}" for i in range(1, 9)]
+            subopcion = st.selectbox("Cajón (1 Arriba, 8 Abajo)", cajones)
+        elif sitio_top == "Congelador 2":
+            cajones = [f"Cajón {i}" for i in range(1, 7)]
+            subopcion = st.selectbox("Cajón (1 Arriba, 6 Abajo)", cajones)
+        elif sitio_top == "Frigorífico":
+            baldas = [f"Balda {i}" for i in range(1, 8)] + ["Puerta"]
+            subopcion = st.selectbox("Baldas (1 Arriba, 7 Abajo)", baldas)
+        elif sitio_top == "Tª Ambiente":
+            # Nuevo caso: al elegir Tª Ambiente, mostramos un text_input para un comentario
+            comentario = st.text_input("Comentario (opcional)")
+            # Usamos "subopcion" para almacenar el texto
+            subopcion = comentario.strip()
 
-# Si hay subopción, la añadimos al nombre principal
-if subopcion:
-    sitio_almacenaje_nuevo = f"{sitio_top} - {subopcion}"
-else:
-    sitio_almacenaje_nuevo = sitio_top
-
+        if subopcion:
+            sitio_almacenaje_nuevo = f"{sitio_top} - {subopcion}"
+        else:
+            sitio_almacenaje_nuevo = sitio_top
 
     # -------------------------------------------------------------------------
     # Botón GUARDAR CAMBIOS
