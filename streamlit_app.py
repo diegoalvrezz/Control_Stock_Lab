@@ -5,6 +5,11 @@ import shutil
 import os
 from io import BytesIO
 
+# -----------------------------------------------------------------------------
+# CONFIGURACIÓN DE PÁGINA
+# -----------------------------------------------------------------------------
+st.set_page_config(page_title="Control de Stock", layout="centered")
+
 STOCK_FILE = "Stock_Original.xlsx"  # Archivo principal de trabajo
 VERSIONS_DIR = "versions"
 ORIGINAL_FILE = os.path.join(VERSIONS_DIR, "Stock_Original.xlsx")
@@ -12,7 +17,7 @@ ORIGINAL_FILE = os.path.join(VERSIONS_DIR, "Stock_Original.xlsx")
 os.makedirs(VERSIONS_DIR, exist_ok=True)
 
 def init_original():
-    """Si no existe 'versions/Stock_Original.xlsx', lo creamos tomando el 'Stock_Original.xlsx'."""
+    """Si no existe 'versions/Stock_Original.xlsx', lo creamos tomando 'Stock_Original.xlsx'."""
     if not os.path.exists(ORIGINAL_FILE):
         if os.path.exists(STOCK_FILE):
             shutil.copy(STOCK_FILE, ORIGINAL_FILE)
@@ -35,103 +40,137 @@ def load_data():
 
 data_dict = load_data()
 
-# -------------------------------------------------------------------------------------
-# BOTONES AUXILIARES
-# -------------------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# FUNCIÓN PARA CONVERSIONES DE TIPOS
+# -----------------------------------------------------------------------------
+def enforce_types(df: pd.DataFrame):
+    # Ref. Saturno -> int
+    if "Ref. Saturno" in df.columns:
+        df["Ref. Saturno"] = pd.to_numeric(df["Ref. Saturno"], errors="coerce").fillna(0).astype(int)
+    # Ref. Fisher -> str
+    if "Ref. Fisher" in df.columns:
+        df["Ref. Fisher"] = df["Ref. Fisher"].astype(str)
+    # Nombre producto -> str
+    if "Nombre producto" in df.columns:
+        df["Nombre producto"] = df["Nombre producto"].astype(str)
+    # Tª -> str
+    if "Tª" in df.columns:
+        df["Tª"] = df["Tª"].astype(str)
+    # Uds. -> int
+    if "Uds." in df.columns:
+        df["Uds."] = pd.to_numeric(df["Uds."], errors="coerce").fillna(0).astype(int)
+    # NºLote -> int
+    if "NºLote" in df.columns:
+        df["NºLote"] = pd.to_numeric(df["NºLote"], errors="coerce").fillna(0).astype(int)
+    # Fechas -> datetime
+    for col in ["Caducidad", "Fecha Pedida", "Fecha Llegada"]:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], errors="coerce")
+    # Restantes -> int
+    if "Restantes" in df.columns:
+        df["Restantes"] = pd.to_numeric(df["Restantes"], errors="coerce").fillna(0).astype(int)
+    # Sitio almacenaje -> str
+    if "Sitio almacenaje" in df.columns:
+        df["Sitio almacenaje"] = df["Sitio almacenaje"].astype(str)
+    # Stock -> int (nueva col)
+    if "Stock" in df.columns:
+        df["Stock"] = pd.to_numeric(df["Stock"], errors="coerce").fillna(0).astype(int)
+    return df
 
-# 1) Botón para ver versiones guardadas
-if st.button("Ver versiones guardadas"):
-    files = os.listdir(VERSIONS_DIR)
-    if files:
-        st.write("### Archivos en la carpeta 'versions':")
-        for f in files:
-            file_path = os.path.join(VERSIONS_DIR, f)
-            if os.path.isfile(file_path):
-                # Opción para descargar cada archivo
-                with open(file_path, "rb") as excel_file:
-                    excel_bytes = excel_file.read()
-                st.download_button(
-                    label=f"Descargar {f}",
-                    data=excel_bytes,
-                    file_name=f,
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-    else:
-        st.write("No hay versiones guardadas aún.")
+# -----------------------------------------------------------------------------
+# Funciones auxiliares para versión y para generar Excel en memoria
+# -----------------------------------------------------------------------------
+def crear_nueva_version_filename():
+    fecha_hora = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    return os.path.join(VERSIONS_DIR, f"Stock_{fecha_hora}.xlsx")
 
-# 2) Botón para limpiar base de datos
-if st.button("Limpiar Base de Datos"):
-    if os.path.exists(ORIGINAL_FILE):
-        shutil.copy(ORIGINAL_FILE, STOCK_FILE)
-        st.success("✅ Base de datos restaurada al estado original.")
-        st.rerun()
-    else:
-        st.error("❌ No se encontró la copia original en 'versions/Stock_Original.xlsx'.")
+def generar_excel_en_memoria(df_act: pd.DataFrame, sheet_nm="Hoja1"):
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df_act.to_excel(writer, index=False, sheet_name=sheet_nm)
+    output.seek(0)
+    return output.getvalue()
 
-# -------------------------------------------------------------------------------------
-# SI HAY DATOS, PROCEDEMOS
-# -------------------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# LAYOUT PRINCIPAL
+# -----------------------------------------------------------------------------
+
+st.title("📦 Control de Stock del Hospital")
+
+# Podemos agrupar controles en sidebars o expanders para mejor estética
+
+with st.sidebar:
+    st.markdown("## Opciones de la Base de Datos")
+
+    # Expander para ver y manejar las versiones
+    with st.expander("🔎 Ver / Gestionar versiones guardadas"):
+        files = sorted(os.listdir(VERSIONS_DIR))
+        # Excluimos la original, por si no queremos mostrarla
+        versions_no_original = [f for f in files if f != "Stock_Original.xlsx"]
+        if versions_no_original:
+            version_sel = st.selectbox("Selecciona una versión:", versions_no_original)
+            if version_sel:
+                # Descargar
+                file_path = os.path.join(VERSIONS_DIR, version_sel)
+                if os.path.isfile(file_path):
+                    with open(file_path, "rb") as excel_file:
+                        excel_bytes = excel_file.read()
+                    st.download_button(
+                        label=f"Descargar {version_sel}",
+                        data=excel_bytes,
+                        file_name=version_sel,
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+                if st.button("Eliminar esta versión"):
+                    try:
+                        os.remove(file_path)
+                        st.warning(f"Versión '{version_sel}' eliminada.")
+                        st.experimental_rerun()
+                    except:
+                        st.error("Error al intentar eliminar la versión.")
+        else:
+            st.write("No hay versiones guardadas (excepto la original).")
+
+        # Botón para eliminar TODAS las versiones excepto la original
+        if st.button("Eliminar TODAS las versiones (excepto original)"):
+            for f in versions_no_original:
+                try:
+                    os.remove(os.path.join(VERSIONS_DIR, f))
+                except:
+                    pass
+            st.info("Todas las versiones (excepto la original) han sido eliminadas.")
+            st.experimental_rerun()
+
+    # Botón para limpiar la base de datos
+    if st.button("Limpiar Base de Datos"):
+        if os.path.exists(ORIGINAL_FILE):
+            shutil.copy(ORIGINAL_FILE, STOCK_FILE)
+            st.success("✅ Base de datos restaurada al estado original.")
+            st.experimental_rerun()
+        else:
+            st.error("❌ No se encontró la copia original en 'versions/Stock_Original.xlsx'.")
+
+# -----------------------------------------------------------------------------
+# MOSTRAR / EDITAR DATOS
+# -----------------------------------------------------------------------------
 if data_dict:
-    st.title("📦 Control de Stock del Hospital")
-
-    # Seleccionar la hoja
     sheet_name = st.selectbox("Selecciona la categoría de stock:", list(data_dict.keys()))
     df = data_dict[sheet_name].copy()
-
-    # Conversiones de tipos, según tus requisitos
-    def enforce_types(df: pd.DataFrame):
-        # Ref. Saturno -> int
-        if "Ref. Saturno" in df.columns:
-            df["Ref. Saturno"] = pd.to_numeric(df["Ref. Saturno"], errors="coerce").fillna(0).astype(int)
-        # Ref. Fisher -> str
-        if "Ref. Fisher" in df.columns:
-            df["Ref. Fisher"] = df["Ref. Fisher"].astype(str)
-        # Nombre producto -> str
-        if "Nombre producto" in df.columns:
-            df["Nombre producto"] = df["Nombre producto"].astype(str)
-        # Tª -> str
-        if "Tª" in df.columns:
-            df["Tª"] = df["Tª"].astype(str)
-        # Uds. -> int
-        if "Uds." in df.columns:
-            df["Uds."] = pd.to_numeric(df["Uds."], errors="coerce").fillna(0).astype(int)
-        # NºLote -> int
-        if "NºLote" in df.columns:
-            df["NºLote"] = pd.to_numeric(df["NºLote"], errors="coerce").fillna(0).astype(int)
-        # Fechas -> datetime
-        for col in ["Caducidad", "Fecha Pedida", "Fecha Llegada"]:
-            if col in df.columns:
-                df[col] = pd.to_datetime(df[col], errors="coerce")
-        # Restantes -> int
-        if "Restantes" in df.columns:
-            df["Restantes"] = pd.to_numeric(df["Restantes"], errors="coerce").fillna(0).astype(int)
-        # Sitio almacenaje -> str
-        if "Sitio almacenaje" in df.columns:
-            df["Sitio almacenaje"] = df["Sitio almacenaje"].astype(str)
-        # Stock -> int
-        if "Stock" in df.columns:
-            df["Stock"] = pd.to_numeric(df["Stock"], errors="coerce").fillna(0).astype(int)
-        return df
-
     df = enforce_types(df)
 
-    # Muestra la tabla (sin PyArrow) con st.write
-    st.write(f"📋 Mostrando datos de: **{sheet_name}**")
-    st.write(df)
+    st.markdown(f"### Hoja seleccionada: **{sheet_name}**")
+    st.dataframe(df)  # Ahora usamos st.dataframe para tener scroll
 
-    # Crear columna de exhibición => "Nombre producto (Ref. Fisher)"
     if "Nombre producto" in df.columns and "Ref. Fisher" in df.columns:
-        display_series = df.apply(
-            lambda row: f"{row['Nombre producto']} ({row['Ref. Fisher']})",
-            axis=1
-        )
+        display_series = df.apply(lambda row: f"{row['Nombre producto']} ({row['Ref. Fisher']})", axis=1)
     else:
         display_series = df.iloc[:, 0].astype(str)
 
-    reactivo = st.selectbox("Selecciona el reactivo a modificar:", display_series.unique())
+    reactivo = st.selectbox("Selecciona Reactivo a Modificar:", display_series.unique())
     row_index = display_series[display_series == reactivo].index[0]
 
-    # Cargar valores actuales
+    # -------------------------------------------------------------------------
+    # Cargar valores
     def get_val(col, default=None):
         return df.at[row_index, col] if col in df.columns else default
 
@@ -141,89 +180,54 @@ if data_dict:
     fecha_llegada_actual = get_val("Fecha Llegada", None)
     sitio_almacenaje_actual = get_val("Sitio almacenaje", "")
     uds_actual = get_val("Uds.", 0)
-    stock_actual = get_val("Stock", 0)  # Nueva columna Stock con valor entero
+    stock_actual = get_val("Stock", 0)
 
-    st.subheader("✏️ Modificar Reactivo")
+    st.markdown("#### Modificar Atributos de Reactivo")
+    col1, col2 = st.columns(2)
+    with col1:
+        lote_nuevo = st.number_input("Nº de Lote", value=int(lote_actual), step=1)
+        caducidad_nueva = st.date_input("Caducidad", value=caducidad_actual if pd.notna(caducidad_actual) else None)
+        fecha_pedida_nueva = st.date_input("Fecha Pedida", value=fecha_pedida_actual if pd.notna(fecha_pedida_actual) else None)
+    with col2:
+        fecha_llegada_nueva = st.date_input("Fecha Llegada", value=fecha_llegada_actual if pd.notna(fecha_llegada_actual) else None)
 
-    # Nº Lote
-    lote_nuevo = st.number_input("Nº de Lote",
-        value=int(lote_actual) if pd.notna(lote_actual) else 0,
-        step=1
-    )
-    # Caducidad
-    caducidad_nueva = st.date_input("Caducidad",
-        value=caducidad_actual if pd.notna(caducidad_actual) else None
-    )
-    # Fecha Pedida
-    fecha_pedida_nueva = st.date_input("Fecha Pedida",
-        value=fecha_pedida_actual if pd.notna(fecha_pedida_actual) else None
-    )
-    # Fecha Llegada
-    fecha_llegada_nueva = st.date_input("Fecha Llegada",
-        value=fecha_llegada_actual if pd.notna(fecha_llegada_actual) else None
-    )
+        # Sitio Almacenaje
+        opciones_sitio = ["Congelador 1", "Congelador 2", "Frigorífico", "Tª Ambiente"]
+        sitio_principal = sitio_almacenaje_actual.split(" - ")[0] if " - " in sitio_almacenaje_actual else sitio_almacenaje_actual
+        if sitio_principal not in opciones_sitio:
+            sitio_principal = opciones_sitio[0]
+        sitio_top = st.selectbox("Sitio de Almacenaje", opciones_sitio, index=opciones_sitio.index(sitio_principal))
 
-    # Manejo Sitio Almacenaje
-    opciones_sitio = ["Congelador 1", "Congelador 2", "Frigorífico", "Tª Ambiente"]
-    sitio_principal = sitio_almacenaje_actual.split(" - ")[0] if " - " in sitio_almacenaje_actual else sitio_almacenaje_actual
-    if sitio_principal not in opciones_sitio:
-        sitio_principal = opciones_sitio[0]
-    sitio_top = st.selectbox("Sitio de Almacenaje", opciones_sitio, index=opciones_sitio.index(sitio_principal))
-
-    subopcion = ""
-    if sitio_top == "Congelador 1":
-        cajones = [f"Cajón {i}" for i in range(1, 9)]
-        subopcion = st.selectbox("Cajón", cajones)
-    elif sitio_top == "Congelador 2":
-        cajones = [f"Cajón {i}" for i in range(1, 7)]
-        subopcion = st.selectbox("Cajón", cajones)
-    elif sitio_top == "Frigorífico":
-        baldas = [f"Balda {i}" for i in range(1, 7)] + ["Puerta"]
-        subopcion = st.selectbox("Baldas", baldas)
-    else:
         subopcion = ""
+        if sitio_top == "Congelador 1":
+            cajones = [f"Cajón {i}" for i in range(1, 9)]
+            subopcion = st.selectbox("Cajón", cajones)
+        elif sitio_top == "Congelador 2":
+            cajones = [f"Cajón {i}" for i in range(1, 7)]
+            subopcion = st.selectbox("Cajón", cajones)
+        elif sitio_top == "Frigorífico":
+            baldas = [f"Balda {i}" for i in range(1, 7)] + ["Puerta"]
+            subopcion = st.selectbox("Baldas", baldas)
 
-    if subopcion:
-        sitio_almacenaje_nuevo = f"{sitio_top} - {subopcion}"
-    else:
-        sitio_almacenaje_nuevo = sitio_top
-
-    # -------------------------------------------------------------------------
-    # Función para generar un archivo con fecha/hora en "versions"
-    # -------------------------------------------------------------------------
-    def crear_nueva_version_filename():
-        fecha_hora = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        return os.path.join(VERSIONS_DIR, f"Stock_{fecha_hora}.xlsx")
-
-    # -------------------------------------------------------------------------
-    # Función para generar Excel en memoria y retornarlo como bytes
-    # -------------------------------------------------------------------------
-    def generar_excel_en_memoria(df_act: pd.DataFrame, sheet_nm="Hoja1"):
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine="openpyxl") as writer:
-            df_act.to_excel(writer, index=False, sheet_name=sheet_nm)
-        output.seek(0)
-        return output.getvalue()
+        if subopcion:
+            sitio_almacenaje_nuevo = f"{sitio_top} - {subopcion}"
+        else:
+            sitio_almacenaje_nuevo = sitio_top
 
     # -------------------------------------------------------------------------
-    # BOTÓN: GUARDAR CAMBIOS
+    # Botón GUARDAR CAMBIOS
     # -------------------------------------------------------------------------
     if st.button("Guardar Cambios"):
-        # *** LÓGICA DE SUMAR AL STOCK CADA VEZ QUE HAYA UNA FECHA DE LLEGADA DIF. A LA ANTERIOR ***
-        #
-        # 1) Si la columna "Stock" existe y la fecha nueva es distinta de la antigua,
-        #    y la fecha nueva no es None => lo consideramos "nueva llegada".
-        #
+        # EJEMPLO: Sumar Stock si la fecha de llegada cambió
         if "Stock" in df.columns:
             if (fecha_llegada_nueva != fecha_llegada_actual) and pd.notna(fecha_llegada_nueva):
-                nuevo_stock = stock_actual + uds_actual
-                df.at[row_index, "Stock"] = nuevo_stock
-                st.info(f"Se han añadido {uds_actual} Uds. a Stock. Queda un total de {nuevo_stock}.")
+                df.at[row_index, "Stock"] = stock_actual + uds_actual
+                st.info(f"Sumadas {uds_actual} uds al stock. Nuevo stock => {stock_actual + uds_actual}")
 
-        # 2) Creamos un nuevo archivo en versions
+        # Crear versión
         new_file = crear_nueva_version_filename()
 
-        # 3) Actualizamos df en memoria (resto de columnas)
+        # Actualizar df
         if "NºLote" in df.columns:
             df.at[row_index, "NºLote"] = int(lote_nuevo)
         if "Caducidad" in df.columns:
@@ -235,7 +239,7 @@ if data_dict:
         if "Sitio almacenaje" in df.columns:
             df.at[row_index, "Sitio almacenaje"] = sitio_almacenaje_nuevo
 
-        # 4) Guardar la versión con fecha/hora en disco
+        # Guardar versión en disco
         with pd.ExcelWriter(new_file, engine="openpyxl") as writer:
             for sht, df_sheet in data_dict.items():
                 if sht == sheet_name:
@@ -243,7 +247,7 @@ if data_dict:
                 else:
                     df_sheet.to_excel(writer, sheet_name=sht, index=False)
 
-        # 5) Guardar TAMBIÉN en nuestro archivo de trabajo (STOCK_FILE)
+        # Guardar en STOCK_FILE
         with pd.ExcelWriter(STOCK_FILE, engine="openpyxl") as writer:
             for sht, df_sheet in data_dict.items():
                 if sht == sheet_name:
@@ -253,14 +257,61 @@ if data_dict:
 
         st.success(f"✅ Cambios guardados en '{new_file}' y '{STOCK_FILE}'.")
 
-        # 6) Generar Excel actualizado en memoria para descargar
+        # Descarga del Excel actualizado en memoria
         excel_bytes = generar_excel_en_memoria(df, sheet_nm=sheet_name)
         st.download_button(
-            label="Descargar Excel con la tabla modificada",
+            label="Descargar Excel modificado",
             data=excel_bytes,
             file_name="Reporte_Stock.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
-        # Si deseas recargar la app en este punto, quita el comentario:
-        # st.rerun()
+        # st.experimental_rerun()
+
+    # -------------------------------------------------------------------------
+    # Sección "Reactivo Agotado"
+    # -------------------------------------------------------------------------
+    st.markdown("---")
+    st.markdown("### Reactivo Agotado")
+    st.write("Si un reactivo se acaba, indica cuál y cuántas unidades salieron del stock.")
+
+    if "Stock" in df.columns:
+        # Elegir el reactivo
+        reactivo_agotado = st.selectbox("Selecciona Reactivo a Consumir:", display_series.unique())
+        row_idx_agotado = display_series[display_series == reactivo_agotado].index[0]
+        stock_actual_agotado = df.at[row_idx_agotado, "Stock"] if not pd.isna(df.at[row_idx_agotado, "Stock"]) else 0
+        uds_consumidas = st.number_input("Unidades consumidas", min_value=0, step=1)
+
+        if st.button("Registrar Consumo"):
+            # Resta al stock sin caer por debajo de 0
+            nuevo_stock = max(0, stock_actual_agotado - uds_consumidas)
+            df.at[row_idx_agotado, "Stock"] = nuevo_stock
+            st.warning(f"Se han consumido {uds_consumidas} uds. Stock final => {nuevo_stock}")
+
+            # Guardamos en disco (y en versión) rápido
+            new_file2 = crear_nueva_version_filename()
+            # Actualizamos DF en el DataDict
+            data_dict[sheet_name] = df
+
+            with pd.ExcelWriter(new_file2, engine="openpyxl") as writer:
+                for sht, df_sheet in data_dict.items():
+                    df_sheet.to_excel(writer, sheet_name=sht, index=False)
+
+            with pd.ExcelWriter(STOCK_FILE, engine="openpyxl") as writer:
+                for sht, df_sheet in data_dict.items():
+                    df_sheet.to_excel(writer, sheet_name=sht, index=False)
+
+            st.success(f"✅ Stock actualizado. Cambios guardados en '{new_file2}' y '{STOCK_FILE}'.")
+
+            # Si quieres permitir descarga inmediata:
+            excel_bytes_2 = generar_excel_en_memoria(df, sheet_nm=sheet_name)
+            st.download_button(
+                label="Descargar Excel tras el consumo",
+                data=excel_bytes_2,
+                file_name="Reporte_Stock_Agotado.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+            # st.experimental_rerun()
+    else:
+        st.info("No se encontró la columna 'Stock' en esta hoja. Agrega la columna primero.")
