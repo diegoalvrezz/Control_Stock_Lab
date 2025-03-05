@@ -94,7 +94,7 @@ def generar_excel_en_memoria(df_act: pd.DataFrame, sheet_nm="Hoja1"):
 # -------------------------------------------------------------------------
 # INTERFAZ
 # -------------------------------------------------------------------------
-st.title("📦 Control de Stock con Alarmas")
+st.title("📦 Control de Stock de Secuenciación")
 
 # SIDEBAR: Opciones de la Base de Datos
 with st.sidebar:
