@@ -43,7 +43,7 @@ if st.button("Limpiar Base de Datos"):
     if os.path.exists(original_file):
         shutil.copy(original_file, file_path)
         st.success("✅ Base de datos restaurada al estado original.")
-        st.experimental_rerun()
+        st.rerun()  # O st.experimental_rerun() en versiones antiguas
     else:
         st.error("❌ No se encontró el archivo original para restaurar.")
 
@@ -163,11 +163,13 @@ if data_dict:
     # SITIO ALMACENAJE (PRIMER SELECTBOX)
     # ---------------------------------------------------------------------------------
     opciones_sitio = ["Congelador 1", "Congelador 2", "Frigorífico", "Tª Ambiente"]
-    sitio_top = st.selectbox("Sitio de Almacenaje", opciones_sitio, 
-                             index=opciones_sitio.index(sitio_almacenaje_actual.split(" - ")[0])
-                             if " - " in sitio_almacenaje_actual else
-                             opciones_sitio.index(sitio_almacenaje_actual) 
-                             if sitio_almacenaje_actual in opciones_sitio else 0)
+    # Intentar extraer la parte principal (p.e. "Congelador 1") de "Congelador 1 - Cajón 3"
+    try:
+        sitio_principal = sitio_almacenaje_actual.split(" - ")[0]
+        index_inicial = opciones_sitio.index(sitio_principal) if sitio_principal in opciones_sitio else 0
+    except:
+        index_inicial = 0
+    sitio_top = st.selectbox("Sitio de Almacenaje", opciones_sitio, index=index_inicial)
 
     # ---------------------------------------------------------------------------------
     # SITIO ALMACENAJE (SUBSELECTBOX) SEGÚN ELECCIÓN
@@ -175,14 +177,14 @@ if data_dict:
     subopcion = ""
     if sitio_top == "Congelador 1":
         cajones = [f"Cajón {i}" for i in range(1, 9)]  # 1..8
-        subopcion = st.selectbox("Cajón(1 Arriba, 8 Abajo)", cajones)
+        subopcion = st.selectbox("Cajón", cajones)
     elif sitio_top == "Congelador 2":
         cajones = [f"Cajón {i}" for i in range(1, 7)]  # 1..6
-        subopcion = st.selectbox("Cajón(1 Arriba, 6 Abajo)", cajones)
+        subopcion = st.selectbox("Cajón", cajones)
     elif sitio_top == "Frigorífico":
         # Balda 1..6 + Puerta
-        baldas = [f"Balda {i}" for i in range(1, 8)] + ["Puerta"]
-        subopcion = st.selectbox("Baldas (1 Arriba, 7 Abajo)", baldas)
+        baldas = [f"Balda {i}" for i in range(1, 7)] + ["Puerta"]
+        subopcion = st.selectbox("Baldas", baldas)
     else:
         # Tª Ambiente => sin subopción
         subopcion = ""
@@ -208,15 +210,16 @@ if data_dict:
     if st.button("Guardar Cambios"):
         guardar_copia_seguridad()
 
-        # Actualizamos en df
+        # Actualizamos en df:
         if "NºLote" in df.columns:
             df.at[row_index, "NºLote"] = int(lote_nuevo)
         if "Caducidad" in df.columns:
-            df.at[row_index, "Caducidad"] = caducidad_nueva
+            # Asignar datetime, evitando advertencia de strings en columna datetime
+            df.at[row_index, "Caducidad"] = pd.to_datetime(caducidad_nueva)
         if "Fecha Pedida" in df.columns:
-            df.at[row_index, "Fecha Pedida"] = fecha_pedida_nueva
+            df.at[row_index, "Fecha Pedida"] = pd.to_datetime(fecha_pedida_nueva)
         if "Fecha Llegada" in df.columns:
-            df.at[row_index, "Fecha Llegada"] = fecha_llegada_nueva
+            df.at[row_index, "Fecha Llegada"] = pd.to_datetime(fecha_llegada_nueva)
         if "Sitio almacenaje" in df.columns:
             df.at[row_index, "Sitio almacenaje"] = sitio_almacenaje_nuevo
 
@@ -229,4 +232,4 @@ if data_dict:
                     data_sheet.to_excel(writer, sheet_name=sheet, index=False)
 
         st.success("✅ Datos actualizados correctamente.")
-        st.rerun()
+        st.rerun()  # Si tu versión de Streamlit es antigua, prueba st.experimental_rerun()
