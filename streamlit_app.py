@@ -98,4 +98,4 @@ if data:
                     data.to_excel(writer, sheet_name=sheet, index=False)
         
         st.success("✅ Datos actualizados correctamente")
-        st.experimental_rerun()  # Recargar la app para mostrar los cambios
+        st.rerun()  # Recargar la app para mostrar los cambios
