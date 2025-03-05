@@ -125,7 +125,7 @@ with st.sidebar:
                     try:
                         os.remove(file_path)
                         st.warning(f"Versión '{version_sel}' eliminada.")
-                        st.experimental_rerun()
+                        st.rerun()
                     except:
                         st.error("Error al intentar eliminar la versión.")
         else:
@@ -139,14 +139,14 @@ with st.sidebar:
                 except:
                     pass
             st.info("Todas las versiones (excepto la original) han sido eliminadas.")
-            st.experimental_rerun()
+            st.rerun()
 
     # Botón para limpiar la base de datos
     if st.button("Limpiar Base de Datos"):
         if os.path.exists(ORIGINAL_FILE):
             shutil.copy(ORIGINAL_FILE, STOCK_FILE)
             st.success("✅ Base de datos restaurada al estado original.")
-            st.experimental_rerun()
+            st.rerun()
         else:
             st.error("❌ No se encontró la copia original en 'versions/Stock_Original.xlsx'.")
 
