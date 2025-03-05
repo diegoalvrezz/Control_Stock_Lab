@@ -60,6 +60,12 @@ if data:
     df["Fecha Pedida"] = pd.to_datetime(df["Fecha Pedida"], errors="coerce")
     df["Fecha Llegada"] = pd.to_datetime(df["Fecha Llegada"], errors="coerce")
     df["Sitio almacenaje"] = df["Sitio almacenaje"].astype(str)
+
+    df["Ref. Fisher"] = df["Ref. Fisher"].astype(str)  # Convertir todo a texto
+
+    st.write("📊 Tipos de datos antes de guardar:")
+    st.write(df.dtypes)
+
     
     # Función para hacer copias de seguridad cada vez que se haga un cambio
     def guardar_copia_seguridad():
@@ -86,6 +92,7 @@ if data:
                     df.to_excel(writer, sheet_name=sheet, index=False)
                 else:
                     data.to_excel(writer, sheet_name=sheet, index=False)
-        
+
         st.success("✅ Datos actualizados correctamente")
-        st.rerun()  # Recargar la app para mostrar los cambios
+        st.rerun()
+
