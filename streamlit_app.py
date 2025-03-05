@@ -229,4 +229,4 @@ if data_dict:
                     data_sheet.to_excel(writer, sheet_name=sheet, index=False)
 
         st.success("✅ Datos actualizados correctamente.")
-        st.experimental_rerun()
+        st.rerun()
