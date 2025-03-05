@@ -95,7 +95,7 @@ def generar_excel_en_memoria(df_act: pd.DataFrame, sheet_nm="Hoja1"):
 # LAYOUT PRINCIPAL
 # -----------------------------------------------------------------------------
 
-st.title("📦 Control de Stock del Hospital")
+st.title("📦 Control de Stock Secuenciación")
 
 # Podemos agrupar controles en sidebars o expanders para mejor estética
 
@@ -201,13 +201,13 @@ if data_dict:
         subopcion = ""
         if sitio_top == "Congelador 1":
             cajones = [f"Cajón {i}" for i in range(1, 9)]
-            subopcion = st.selectbox("Cajón", cajones)
+            subopcion = st.selectbox("Cajón (1 Arriba, 8 Abajo)", cajones)
         elif sitio_top == "Congelador 2":
             cajones = [f"Cajón {i}" for i in range(1, 7)]
-            subopcion = st.selectbox("Cajón", cajones)
+            subopcion = st.selectbox("Cajón (1 Arriba, 6 Abajo)", cajones)
         elif sitio_top == "Frigorífico":
-            baldas = [f"Balda {i}" for i in range(1, 7)] + ["Puerta"]
-            subopcion = st.selectbox("Baldas", baldas)
+            baldas = [f"Balda {i}" for i in range(1, 8)] + ["Puerta"]
+            subopcion = st.selectbox("Baldas (1 Arriba, 7 Abajo)", baldas)
 
         if subopcion:
             sitio_almacenaje_nuevo = f"{sitio_top} - {subopcion}"
