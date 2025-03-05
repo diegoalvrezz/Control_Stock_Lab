@@ -201,7 +201,7 @@ if data_dict:
     # -------------------------------------------------------------------------
     def to_latin1_compatible(text):
     # Quitar o reemplazar caracteres no soportados en latin-1
-    return text.encode("latin-1", errors="replace").decode("latin-1")
+        return text.encode("latin-1", errors="replace").decode("latin-1")
 
     def generar_pdf_de_df(dataframe: pd.DataFrame, titulo_pdf="Reporte Stock"):
     pdf = FPDF()
