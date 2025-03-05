@@ -5,10 +5,10 @@ import shutil
 import os
 from io import BytesIO
 
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------
 # CONFIGURACIÓN DE PÁGINA
-# -----------------------------------------------------------------------------
-st.set_page_config(page_title="Control de Stock", layout="centered")
+# -------------------------------------------------------------------------
+st.set_page_config(page_title="Control de Stock con Alarmas", layout="centered")
 
 STOCK_FILE = "Stock_Original.xlsx"  # Archivo principal de trabajo
 VERSIONS_DIR = "versions"
@@ -40,9 +40,9 @@ def load_data():
 
 data_dict = load_data()
 
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------
 # FUNCIÓN PARA CONVERSIONES DE TIPOS
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------
 def enforce_types(df: pd.DataFrame):
     # Ref. Saturno -> int
     if "Ref. Saturno" in df.columns:
@@ -72,14 +72,14 @@ def enforce_types(df: pd.DataFrame):
     # Sitio almacenaje -> str
     if "Sitio almacenaje" in df.columns:
         df["Sitio almacenaje"] = df["Sitio almacenaje"].astype(str)
-    # Stock -> int (nueva col)
+    # Stock -> int
     if "Stock" in df.columns:
         df["Stock"] = pd.to_numeric(df["Stock"], errors="coerce").fillna(0).astype(int)
     return df
 
-# -----------------------------------------------------------------------------
-# Funciones auxiliares para versión y para generar Excel en memoria
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------
+# Funciones auxiliares
+# -------------------------------------------------------------------------
 def crear_nueva_version_filename():
     fecha_hora = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     return os.path.join(VERSIONS_DIR, f"Stock_{fecha_hora}.xlsx")
@@ -91,26 +91,22 @@ def generar_excel_en_memoria(df_act: pd.DataFrame, sheet_nm="Hoja1"):
     output.seek(0)
     return output.getvalue()
 
-# -----------------------------------------------------------------------------
-# LAYOUT PRINCIPAL
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------
+# INTERFAZ
+# -------------------------------------------------------------------------
+st.title("📦 Control de Stock con Alarmas")
 
-st.title("📦 Control de Stock Secuenciación")
-
-# Podemos agrupar controles en sidebars o expanders para mejor estética
-
+# SIDEBAR: Opciones de la Base de Datos
 with st.sidebar:
     st.markdown("## Opciones de la Base de Datos")
 
     # Expander para ver y manejar las versiones
     with st.expander("🔎 Ver / Gestionar versiones guardadas"):
         files = sorted(os.listdir(VERSIONS_DIR))
-        # Excluimos la original, por si no queremos mostrarla
         versions_no_original = [f for f in files if f != "Stock_Original.xlsx"]
         if versions_no_original:
             version_sel = st.selectbox("Selecciona una versión:", versions_no_original)
             if version_sel:
-                # Descargar
                 file_path = os.path.join(VERSIONS_DIR, version_sel)
                 if os.path.isfile(file_path):
                     with open(file_path, "rb") as excel_file:
@@ -131,7 +127,6 @@ with st.sidebar:
         else:
             st.write("No hay versiones guardadas (excepto la original).")
 
-        # Botón para eliminar TODAS las versiones excepto la original
         if st.button("Eliminar TODAS las versiones (excepto original)"):
             for f in versions_no_original:
                 try:
@@ -150,17 +145,61 @@ with st.sidebar:
         else:
             st.error("❌ No se encontró la copia original en 'versions/Stock_Original.xlsx'.")
 
-# -----------------------------------------------------------------------------
-# MOSTRAR / EDITAR DATOS
-# -----------------------------------------------------------------------------
+    st.markdown("---")
+    # Nuevo expander: Alarmas
+    with st.expander("⚠️ Alarmas"):
+        """
+        Mostramos alarmas rojas/naranjas basado en:
+        - Stock == 0
+        - Comparación de Fecha Pedida con hoy
+          * Alarma ROJA => Fecha Pedida < hoy => No se ha pedido
+          * Alarma NARANJA => Fecha Pedida >= hoy => Sí se ha pedido
+        """
+        if data_dict:
+            hoy = pd.Timestamp.now().normalize()
+            for nombre_hoja, df_hoja in data_dict.items():
+                df_hoja = enforce_types(df_hoja)
+                if "Stock" in df_hoja.columns and "Fecha Pedida" in df_hoja.columns:
+                    df_cero = df_hoja[df_hoja["Stock"] == 0].copy()
+                    if not df_cero.empty:
+                        st.markdown(f"**Hoja: {nombre_hoja}**")
+                        for idx, fila in df_cero.iterrows():
+                            fecha_ped = fila["Fecha Pedida"]
+                            if pd.notna(fecha_ped):
+                                fecha_ped = fecha_ped.normalize()
+                            producto = (fila["Nombre producto"]
+                                        if "Nombre producto" in df_hoja.columns
+                                        else f"Fila {idx}")
+                            fisher = (fila["Ref. Fisher"]
+                                      if "Ref. Fisher" in df_hoja.columns
+                                      else "")
+
+                            # Decidir alarma
+                            if pd.isna(fecha_ped) or (fecha_ped < hoy):
+                                # Alarma ROJA => Fecha Pedida < hoy => No se ha pedido
+                                st.error(f"[{producto} ({fisher})] => Stock=0, Fecha Pedida < hoy => ALARMA ROJA")
+                            else:
+                                # Alarma NARANJA => Fecha Pedida >= hoy => Sí se ha pedido
+                                st.warning(f"[{producto} ({fisher})] => Stock=0, Fecha Pedida >= hoy => ALARMA NARANJA")
+                # Si la hoja no tiene Stock o Fecha Pedida, no hacemos nada
+        else:
+            st.info("No se han cargado datos o no existe la base de datos.")
+
+
+# -------------------------------------------------------------------------
+# CUERPO PRINCIPAL
+# -------------------------------------------------------------------------
 if data_dict:
     sheet_name = st.selectbox("Selecciona la categoría de stock:", list(data_dict.keys()))
     df = data_dict[sheet_name].copy()
     df = enforce_types(df)
 
     st.markdown(f"### Hoja seleccionada: **{sheet_name}**")
-    st.dataframe(df)  # Ahora usamos st.dataframe para tener scroll
 
+    # st.dataframe un poco más grande
+    st.dataframe(df, height=600)
+
+    # Display series
     if "Nombre producto" in df.columns and "Ref. Fisher" in df.columns:
         display_series = df.apply(lambda row: f"{row['Nombre producto']} ({row['Ref. Fisher']})", axis=1)
     else:
@@ -169,11 +208,10 @@ if data_dict:
     reactivo = st.selectbox("Selecciona Reactivo a Modificar:", display_series.unique())
     row_index = display_series[display_series == reactivo].index[0]
 
-    # -------------------------------------------------------------------------
-    # Cargar valores
     def get_val(col, default=None):
         return df.at[row_index, col] if col in df.columns else default
 
+    # Cargar valores
     lote_actual = get_val("NºLote", 0)
     caducidad_actual = get_val("Caducidad", None)
     fecha_pedida_actual = get_val("Fecha Pedida", None)
@@ -209,9 +247,7 @@ if data_dict:
             baldas = [f"Balda {i}" for i in range(1, 8)] + ["Puerta"]
             subopcion = st.selectbox("Baldas (1 Arriba, 7 Abajo)", baldas)
         elif sitio_top == "Tª Ambiente":
-            # Nuevo caso: al elegir Tª Ambiente, mostramos un text_input para un comentario
             comentario = st.text_input("Comentario (opcional)")
-            # Usamos "subopcion" para almacenar el texto
             subopcion = comentario.strip()
 
         if subopcion:
@@ -219,17 +255,14 @@ if data_dict:
         else:
             sitio_almacenaje_nuevo = sitio_top
 
-    # -------------------------------------------------------------------------
     # Botón GUARDAR CAMBIOS
-    # -------------------------------------------------------------------------
     if st.button("Guardar Cambios"):
-        # EJEMPLO: Sumar Stock si la fecha de llegada cambió
+        # Sumar Stock si la fecha de llegada cambió
         if "Stock" in df.columns:
             if (fecha_llegada_nueva != fecha_llegada_actual) and pd.notna(fecha_llegada_nueva):
                 df.at[row_index, "Stock"] = stock_actual + uds_actual
                 st.info(f"Sumadas {uds_actual} uds al stock. Nuevo stock => {stock_actual + uds_actual}")
 
-        # Crear versión
         new_file = crear_nueva_version_filename()
 
         # Actualizar df
@@ -244,7 +277,7 @@ if data_dict:
         if "Sitio almacenaje" in df.columns:
             df.at[row_index, "Sitio almacenaje"] = sitio_almacenaje_nuevo
 
-        # Guardar versión en disco
+        # Guardar versión
         with pd.ExcelWriter(new_file, engine="openpyxl") as writer:
             for sht, df_sheet in data_dict.items():
                 if sht == sheet_name:
@@ -262,7 +295,6 @@ if data_dict:
 
         st.success(f"✅ Cambios guardados en '{new_file}' y '{STOCK_FILE}'.")
 
-        # Descarga del Excel actualizado en memoria
         excel_bytes = generar_excel_en_memoria(df, sheet_nm=sheet_name)
         st.download_button(
             label="Descargar Excel modificado",
@@ -271,52 +303,4 @@ if data_dict:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
-        # st.experimental_rerun()
-
-    # -------------------------------------------------------------------------
-    # Sección "Reactivo Agotado"
-    # -------------------------------------------------------------------------
-    st.markdown("---")
-    st.markdown("### Reactivo Agotado")
-    st.write("Si un reactivo se acaba, indica cuál y cuántas unidades salieron del stock.")
-
-    if "Stock" in df.columns:
-        # Elegir el reactivo
-        reactivo_agotado = st.selectbox("Selecciona Reactivo a Consumir:", display_series.unique())
-        row_idx_agotado = display_series[display_series == reactivo_agotado].index[0]
-        stock_actual_agotado = df.at[row_idx_agotado, "Stock"] if not pd.isna(df.at[row_idx_agotado, "Stock"]) else 0
-        uds_consumidas = st.number_input("Unidades consumidas", min_value=0, step=1)
-
-        if st.button("Registrar Consumo"):
-            # Resta al stock sin caer por debajo de 0
-            nuevo_stock = max(0, stock_actual_agotado - uds_consumidas)
-            df.at[row_idx_agotado, "Stock"] = nuevo_stock
-            st.warning(f"Se han consumido {uds_consumidas} uds. Stock final => {nuevo_stock}")
-
-            # Guardamos en disco (y en versión) rápido
-            new_file2 = crear_nueva_version_filename()
-            # Actualizamos DF en el DataDict
-            data_dict[sheet_name] = df
-
-            with pd.ExcelWriter(new_file2, engine="openpyxl") as writer:
-                for sht, df_sheet in data_dict.items():
-                    df_sheet.to_excel(writer, sheet_name=sht, index=False)
-
-            with pd.ExcelWriter(STOCK_FILE, engine="openpyxl") as writer:
-                for sht, df_sheet in data_dict.items():
-                    df_sheet.to_excel(writer, sheet_name=sht, index=False)
-
-            st.success(f"✅ Stock actualizado. Cambios guardados en '{new_file2}' y '{STOCK_FILE}'.")
-
-            # Si quieres permitir descarga inmediata:
-            excel_bytes_2 = generar_excel_en_memoria(df, sheet_nm=sheet_name)
-            st.download_button(
-                label="Descargar Excel tras el consumo",
-                data=excel_bytes_2,
-                file_name="Reporte_Stock_Agotado.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-
-            # st.experimental_rerun()
-    else:
-        st.info("No se encontró la columna 'Stock' en esta hoja. Agrega la columna primero.")
+        # st.rerun()
