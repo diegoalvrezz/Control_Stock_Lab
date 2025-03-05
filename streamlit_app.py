@@ -7,7 +7,7 @@ import os
 # PDF
 from fpdf import FPDF
 
-STOCK_FILE = "Stock_Modificadov1.xlsx"  # Archivo principal de trabajo
+STOCK_FILE = "Stock_Original.xlsx"  # Archivo principal de trabajo
 VERSIONS_DIR = "versions"
 ORIGINAL_FILE = os.path.join(VERSIONS_DIR, "Stock_Original.xlsx")
 
