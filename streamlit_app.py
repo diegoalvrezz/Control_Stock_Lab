@@ -3,9 +3,7 @@ import pandas as pd
 import datetime
 import shutil
 import os
-
-# PDF
-from fpdf import FPDF
+from io import BytesIO
 
 STOCK_FILE = "Stock_Original.xlsx"  # Archivo principal de trabajo
 VERSIONS_DIR = "versions"
@@ -14,7 +12,7 @@ ORIGINAL_FILE = os.path.join(VERSIONS_DIR, "Stock_Original.xlsx")
 os.makedirs(VERSIONS_DIR, exist_ok=True)
 
 def init_original():
-    """Si no existe 'versions/Stock_Original.xlsx', lo creamos tomando el 'Stock_Modificadov1.xlsx'."""
+    """Si no existe 'versions/Stock_Original.xlsx', lo creamos tomando el 'Stock_Original.xlsx'."""
     if not os.path.exists(ORIGINAL_FILE):
         if os.path.exists(STOCK_FILE):
             shutil.copy(STOCK_FILE, ORIGINAL_FILE)
@@ -80,7 +78,7 @@ if data_dict:
     sheet_name = st.selectbox("Selecciona la categoría de stock:", list(data_dict.keys()))
     df = data_dict[sheet_name].copy()
 
-    # Conversiones de tipos, según lo que pediste (refactor breve)
+    # Conversiones de tipos, según tus requisitos
     def enforce_types(df: pd.DataFrame):
         # Ref. Saturno -> int
         if "Ref. Saturno" in df.columns:
@@ -118,7 +116,7 @@ if data_dict:
     st.write(f"📋 Mostrando datos de: **{sheet_name}**")
     st.write(df)
 
-    # Crear columna de exhibición => Nombre producto (Ref. Fisher)
+    # Crear columna de exhibición => "Nombre producto (Ref. Fisher)"
     if "Nombre producto" in df.columns and "Ref. Fisher" in df.columns:
         display_series = df.apply(
             lambda row: f"{row['Nombre producto']} ({row['Ref. Fisher']})",
@@ -143,24 +141,20 @@ if data_dict:
     st.subheader("✏️ Modificar Reactivo")
 
     # Nº Lote
-    lote_nuevo = st.number_input(
-        "Nº de Lote", 
-        value=int(lote_actual) if pd.notna(lote_actual) else 0, 
+    lote_nuevo = st.number_input("Nº de Lote",
+        value=int(lote_actual) if pd.notna(lote_actual) else 0,
         step=1
     )
     # Caducidad
-    caducidad_nueva = st.date_input(
-        "Caducidad", 
+    caducidad_nueva = st.date_input("Caducidad",
         value=caducidad_actual if pd.notna(caducidad_actual) else None
     )
     # Fecha Pedida
-    fecha_pedida_nueva = st.date_input(
-        "Fecha Pedida", 
+    fecha_pedida_nueva = st.date_input("Fecha Pedida",
         value=fecha_pedida_actual if pd.notna(fecha_pedida_actual) else None
     )
     # Fecha Llegada
-    fecha_llegada_nueva = st.date_input(
-        "Fecha Llegada", 
+    fecha_llegada_nueva = st.date_input("Fecha Llegada",
         value=fecha_llegada_actual if pd.notna(fecha_llegada_actual) else None
     )
 
@@ -197,33 +191,16 @@ if data_dict:
         return os.path.join(VERSIONS_DIR, f"Stock_{fecha_hora}.xlsx")
 
     # -------------------------------------------------------------------------
-    # Generar PDF para descargar
+    # Función para generar Excel en memoria y retornarlo como bytes
     # -------------------------------------------------------------------------
-    def to_latin1_compatible(text):
-    # Quitar o reemplazar caracteres no soportados en latin-1
-        return text.encode("latin-1", errors="replace").decode("latin-1")
+    from io import BytesIO
 
-    def generar_pdf_de_df(dataframe: pd.DataFrame, titulo_pdf="Reporte Stock"):
-        pdf = FPDF()
-        pdf.add_page()
-        # Usa la fuente estándar
-        pdf.set_font("Arial", size=12)
-
-        pdf.cell(200, 10, txt=to_latin1_compatible(titulo_pdf), ln=True, align="C")
-
-        col_names = list(dataframe.columns)
-        encabezado = " | ".join(to_latin1_compatible(col) for col in col_names)
-        pdf.cell(200, 10, txt=encabezado, ln=True)
-
-        for _, row_data in dataframe.iterrows():
-            row_str = " | ".join(to_latin1_compatible(str(row_data[col])) for col in col_names)
-            pdf.cell(200, 10, txt=row_str, ln=True)
-
-        # Devuelve PDF en memoria
-        return pdf.output(dest="S").encode("latin-1", errors="replace")
-
-
-
+    def generar_excel_en_memoria(df_act: pd.DataFrame, sheet_nm="Hoja1"):
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            df_act.to_excel(writer, index=False, sheet_name=sheet_nm)
+        output.seek(0)
+        return output.getvalue()
 
     # -------------------------------------------------------------------------
     # BOTÓN: GUARDAR CAMBIOS
@@ -244,7 +221,7 @@ if data_dict:
         if "Sitio almacenaje" in df.columns:
             df.at[row_index, "Sitio almacenaje"] = sitio_almacenaje_nuevo
 
-        # 3) Guardar la versión con fecha/hora
+        # 3) Guardar la versión con fecha/hora en disco
         with pd.ExcelWriter(new_file, engine="openpyxl") as writer:
             for sht, df_sheet in data_dict.items():
                 if sht == sheet_name:
@@ -262,14 +239,14 @@ if data_dict:
 
         st.success(f"✅ Cambios guardados en '{new_file}' y '{STOCK_FILE}'.")
 
-        # 5) Generar PDF y mostrar botón de descarga
-        pdf_bytes = generar_pdf_de_df(df, titulo_pdf=f"Reporte Stock - {sheet_name}")
+        # 5) Generar Excel actualizado en memoria para descargar
+        excel_bytes = generar_excel_en_memoria(df, sheet_nm=sheet_name)
         st.download_button(
-            label="Descargar PDF con la tabla modificada",
-            data=pdf_bytes,
-            file_name="Reporte_Stock.pdf",
-            mime="application/pdf"
+            label="Descargar Excel con la tabla modificada",
+            data=excel_bytes,
+            file_name="Reporte_Stock.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
-        # si deseas recargar la app en este punto, quita el comentario:
+        # Si deseas recargar la app en este punto, quita el comentario:
         # st.rerun()
