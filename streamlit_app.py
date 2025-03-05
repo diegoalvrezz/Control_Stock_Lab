@@ -62,10 +62,11 @@ if data:
     df["Sitio almacenaje"] = df["Sitio almacenaje"].astype(str)
 
     df["Ref. Fisher"] = df["Ref. Fisher"].astype(str)  # Convertir todo a texto
-
+    df["Tª"] = df["Tª"].astype(str)  # Convertir temperatura a texto también
+    df["Restantes"] = pd.to_numeric(df["Restantes"], errors="coerce").astype("Int64")
+    
     st.write("📊 Tipos de datos antes de guardar:")
     st.write(df.dtypes)
-
     
     # Función para hacer copias de seguridad cada vez que se haga un cambio
     def guardar_copia_seguridad():
@@ -95,4 +96,3 @@ if data:
 
         st.success("✅ Datos actualizados correctamente")
         st.rerun()
-
