@@ -4,39 +4,40 @@ import datetime
 import shutil
 import os
 
-# -----------------------------------------------------------------------------
-# Rutas y nombres de archivo
-# -----------------------------------------------------------------------------
-ORIGINAL_FILE = "Stock_Original.xlsx"   # Archivo que NUNCA se modifica
-CURRENT_FILE = "Stock_Current.xlsx"     # Archivo donde trabajamos realmente
-VERSIONS_DIR = "versions"               # Carpeta para guardar copias con fecha
+# -------------------------------------------------------------------------------------
+# NOMBRE ÚNICO DEL ARCHIVO SUBIDO POR EL USUARIO
+# -------------------------------------------------------------------------------------
+STOCK_FILE = "Stock_Original.xlsx"  # El único archivo que el usuario sube
+VERSIONS_DIR = "versions"               # Carpeta donde almacenamos versiones
+ORIGINAL_FILE = os.path.join(VERSIONS_DIR, "Stock_Original.xlsx")
 
 os.makedirs(VERSIONS_DIR, exist_ok=True)
 
-# -----------------------------------------------------------------------------
-# Función para inicializar la base de datos actual si no existe
-# -----------------------------------------------------------------------------
-def init_current_file():
-    """Si no existe Stock_Current.xlsx, lo copiamos desde Stock_Original.xlsx."""
-    if not os.path.exists(CURRENT_FILE):
-        if os.path.exists(ORIGINAL_FILE):
-            shutil.copy(ORIGINAL_FILE, CURRENT_FILE)
+# -------------------------------------------------------------------------------------
+# FUNCIÓN PARA CREAR LA VERSIÓN ORIGINAL AL INICIO
+# -------------------------------------------------------------------------------------
+def init_original():
+    """
+    Si no existe versions/Stock_Original.xlsx, lo creamos tomando Stock_Modificadov1.xlsx
+    Así solo se necesita subir un archivo, y en 'versions' guardamos la copia original.
+    """
+    if not os.path.exists(ORIGINAL_FILE):
+        if os.path.exists(STOCK_FILE):
+            shutil.copy(STOCK_FILE, ORIGINAL_FILE)
+            print("Se creó el archivo original en 'versions/Stock_Original.xlsx'")
         else:
-            st.error(f"No existe el archivo original: {ORIGINAL_FILE}")
+            st.error(f"No se encontró {STOCK_FILE}. Asegúrate de subirlo.")
 
-# -----------------------------------------------------------------------------
-# Llamamos a la función de inicialización
-# -----------------------------------------------------------------------------
-init_current_file()
+init_original()
 
-# -----------------------------------------------------------------------------
-# Función para cargar TODAS las hojas del archivo actual
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
+# FUNCIÓN PARA CARGAR TODAS LAS HOJAS DEL ARCHIVO PRINCIPAL
+# -------------------------------------------------------------------------------------
 def load_data():
     try:
-        return pd.read_excel(CURRENT_FILE, sheet_name=None, engine="openpyxl")
+        return pd.read_excel(STOCK_FILE, sheet_name=None, engine="openpyxl")
     except FileNotFoundError:
-        st.error(f"❌ No se encontró {CURRENT_FILE}.")
+        st.error(f"❌ No se encontró {STOCK_FILE}.")
         return None
     except Exception as e:
         st.error(f"❌ Error al cargar la base de datos: {e}")
@@ -44,39 +45,41 @@ def load_data():
 
 data_dict = load_data()
 
-# -----------------------------------------------------------------------------
-# Botón para ver “versions” guardadas
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
+# BOTÓN PARA VER VERSIONES GUARDADAS
+# -------------------------------------------------------------------------------------
 if st.button("Ver versiones guardadas"):
     files = os.listdir(VERSIONS_DIR)
     if files:
-        st.write("### Archivos de versiones en carpeta 'versions':")
+        st.write("### Archivos en la carpeta 'versions':")
         for f in files:
             st.write(f"- {f}")
     else:
         st.write("No hay versiones guardadas aún.")
 
-# -----------------------------------------------------------------------------
-# Botón para limpiar base de datos
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
+# BOTÓN PARA LIMPIAR BASE DE DATOS (RESTARAURAR DESDE ORIGINAL)
+# -------------------------------------------------------------------------------------
 if st.button("Limpiar Base de Datos"):
     if os.path.exists(ORIGINAL_FILE):
-        shutil.copy(ORIGINAL_FILE, CURRENT_FILE)
+        shutil.copy(ORIGINAL_FILE, STOCK_FILE)
         st.success("✅ Base de datos restaurada al estado original.")
-        st.experimental_rerun()
+        st.rerun()
     else:
-        st.error(f"❌ No se encontró el archivo original '{ORIGINAL_FILE}' para restaurar.")
+        st.error("❌ No se encontró la copia original en 'versions/Stock_Original.xlsx'.")
 
-# -----------------------------------------------------------------------------
-# Si hay datos, trabajamos con ellos
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
+# SI HAY DATOS, TRABAJAMOS CON ELLOS
+# -------------------------------------------------------------------------------------
 if data_dict:
+    st.title("📦 Control de Stock del Hospital")
+
     # Elegir la hoja
     sheet_name = st.selectbox("Selecciona la categoría de stock:", list(data_dict.keys()))
     df = data_dict[sheet_name].copy()
 
     # ==============================
-    # TIPOS DE DATOS (SEGÚN TUS REQUISITOS)
+    # CONVERSIONES A TIPOS (TU REQUISITO)
     # ==============================
     # Ref. Saturno -> int
     if "Ref. Saturno" in df.columns:
@@ -116,13 +119,13 @@ if data_dict:
         df["Sitio almacenaje"] = df["Sitio almacenaje"].astype(str)
 
     # ==============================
-    # MOSTRAR LA TABLA (SIN PyArrow) USANDO st.write
+    # MOSTRAR TABLA (SIN PyArrow) USANDO st.write
     # ==============================
     st.write(f"📋 Mostrando datos de: **{sheet_name}**")
     st.write(df)
 
     # ==============================
-    # REACTIVO: Nombre producto + (Ref. Fisher)
+    # CREAR COL. EXHIBICIÓN => Nombre producto + (Ref. Fisher)
     # ==============================
     if "Nombre producto" in df.columns and "Ref. Fisher" in df.columns:
         display_series = df.apply(
@@ -130,14 +133,13 @@ if data_dict:
             axis=1
         )
     else:
-        # fallback
         display_series = df.iloc[:, 0].astype(str)
 
     reactivo = st.selectbox("Selecciona el reactivo a modificar:", display_series.unique())
     row_index = display_series[display_series == reactivo].index[0]
 
     # ==============================
-    # Carga valores actuales
+    # CARGAR VALORES ACTUALES
     # ==============================
     def get_val(col, default=None):
         return df.at[row_index, col] if col in df.columns else default
@@ -148,23 +150,26 @@ if data_dict:
     fecha_llegada_actual = get_val("Fecha Llegada", None)
     sitio_almacenaje_actual = get_val("Sitio almacenaje", "")
 
-    # ==============================
-    # FORMULARIO
-    # ==============================
     st.subheader("✏️ Modificar Reactivo")
 
+    # Nº Lote
     lote_nuevo = st.number_input("Nº de Lote", value=int(lote_actual) if pd.notna(lote_actual) else 0, step=1)
+    # Caducidad
     caducidad_nueva = st.date_input("Caducidad", value=caducidad_actual if pd.notna(caducidad_actual) else None)
+    # Fecha Pedida
     fecha_pedida_nueva = st.date_input("Fecha Pedida", value=fecha_pedida_actual if pd.notna(fecha_pedida_actual) else None)
+    # Fecha Llegada
     fecha_llegada_nueva = st.date_input("Fecha Llegada", value=fecha_llegada_actual if pd.notna(fecha_llegada_actual) else None)
 
-    # SITIO ALMACENAJE
+    # Sitio Almacenaje principal
     opciones_sitio = ["Congelador 1", "Congelador 2", "Frigorífico", "Tª Ambiente"]
+    # Intentar extraer la parte principal
     sitio_principal = sitio_almacenaje_actual.split(" - ")[0] if " - " in sitio_almacenaje_actual else sitio_almacenaje_actual
     if sitio_principal not in opciones_sitio:
         sitio_principal = opciones_sitio[0]
     sitio_top = st.selectbox("Sitio de Almacenaje", opciones_sitio, index=opciones_sitio.index(sitio_principal))
 
+    # Subopción
     subopcion = ""
     if sitio_top == "Congelador 1":
         cajones = [f"Cajón {i}" for i in range(1, 9)]
@@ -173,7 +178,6 @@ if data_dict:
         cajones = [f"Cajón {i}" for i in range(1, 7)]
         subopcion = st.selectbox("Cajón", cajones)
     elif sitio_top == "Frigorífico":
-        # Balda 1..6 + Puerta
         baldas = [f"Balda {i}" for i in range(1, 7)] + ["Puerta"]
         subopcion = st.selectbox("Baldas", baldas)
     else:
@@ -184,18 +188,17 @@ if data_dict:
     else:
         sitio_almacenaje_nuevo = sitio_top
 
-    # ==============================
+    # ---------------------------------------------------------------------------------
     # GUARDAR CAMBIOS
-    # ==============================
-    def guardar_copia():
-        """Crea un nuevo archivo con fecha/hora en la carpeta versions."""
+    # ---------------------------------------------------------------------------------
+    def crear_nueva_version():
+        """Crea un archivo en la carpeta 'versions' con fecha/hora."""
         fecha_hora = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        new_filename = f"{VERSIONS_DIR}/Stock_{fecha_hora}.xlsx"
-        return new_filename
+        return os.path.join(VERSIONS_DIR, f"Stock_{fecha_hora}.xlsx")
 
     if st.button("Guardar Cambios"):
-        # 1) Creamos un nuevo archivo con fecha/hora en versions/
-        new_file = guardar_copia()
+        # 1) Creamos un nuevo archivo con fecha/hora en 'versions'
+        new_file = crear_nueva_version()
 
         # 2) Actualizamos df
         if "NºLote" in df.columns:
@@ -209,21 +212,21 @@ if data_dict:
         if "Sitio almacenaje" in df.columns:
             df.at[row_index, "Sitio almacenaje"] = sitio_almacenaje_nuevo
 
-        # 3) Guardar la versión con fecha/hora
+        # 3) Guardamos la versión con fecha/hora
         with pd.ExcelWriter(new_file, engine="openpyxl") as writer:
-            for sheet, data_sheet in data_dict.items():
-                if sheet == sheet_name:
-                    df.to_excel(writer, sheet_name=sheet, index=False)
+            for sht, df_sheet in data_dict.items():
+                if sht == sheet_name:
+                    df.to_excel(writer, sheet_name=sht, index=False)
                 else:
-                    data_sheet.to_excel(writer, sheet_name=sheet, index=False)
+                    df_sheet.to_excel(writer, sheet_name=sht, index=False)
 
-        # 4) Guardar TAMBIÉN en Stock_Current.xlsx para seguir trabajando con esta base
-        with pd.ExcelWriter(CURRENT_FILE, engine="openpyxl") as writer:
-            for sheet, data_sheet in data_dict.items():
-                if sheet == sheet_name:
-                    df.to_excel(writer, sheet_name=sheet, index=False)
+        # 4) Guardamos TAMBIÉN en Stock_Modificadov1.xlsx (archivo de trabajo)
+        with pd.ExcelWriter(STOCK_FILE, engine="openpyxl") as writer:
+            for sht, df_sheet in data_dict.items():
+                if sht == sheet_name:
+                    df.to_excel(writer, sheet_name=sht, index=False)
                 else:
-                    data_sheet.to_excel(writer, sheet_name=sheet, index=False)
+                    df_sheet.to_excel(writer, sheet_name=sht, index=False)
 
-        st.success(f"✅ Cambios guardados en: {new_file}\nTambién se actualizó {CURRENT_FILE}")
+        st.success(f"✅ Cambios guardados en '{new_file}' y '{STOCK_FILE}'.")
         st.rerun()
