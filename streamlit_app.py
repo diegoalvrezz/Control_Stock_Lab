@@ -108,6 +108,9 @@ if data_dict:
         # Sitio almacenaje -> str
         if "Sitio almacenaje" in df.columns:
             df["Sitio almacenaje"] = df["Sitio almacenaje"].astype(str)
+        # Stock -> int
+        if "Stock" in df.columns:
+            df["Stock"] = pd.to_numeric(df["Stock"], errors="coerce").fillna(0).astype(int)
         return df
 
     df = enforce_types(df)
@@ -137,6 +140,8 @@ if data_dict:
     fecha_pedida_actual = get_val("Fecha Pedida", None)
     fecha_llegada_actual = get_val("Fecha Llegada", None)
     sitio_almacenaje_actual = get_val("Sitio almacenaje", "")
+    uds_actual = get_val("Uds.", 0)
+    stock_actual = get_val("Stock", 0)  # Nueva columna Stock con valor entero
 
     st.subheader("✏️ Modificar Reactivo")
 
@@ -193,8 +198,6 @@ if data_dict:
     # -------------------------------------------------------------------------
     # Función para generar Excel en memoria y retornarlo como bytes
     # -------------------------------------------------------------------------
-    from io import BytesIO
-
     def generar_excel_en_memoria(df_act: pd.DataFrame, sheet_nm="Hoja1"):
         output = BytesIO()
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
@@ -206,10 +209,21 @@ if data_dict:
     # BOTÓN: GUARDAR CAMBIOS
     # -------------------------------------------------------------------------
     if st.button("Guardar Cambios"):
-        # 1) Creamos un nuevo archivo en versions
+        # *** LÓGICA DE SUMAR AL STOCK CADA VEZ QUE HAYA UNA FECHA DE LLEGADA DIF. A LA ANTERIOR ***
+        #
+        # 1) Si la columna "Stock" existe y la fecha nueva es distinta de la antigua,
+        #    y la fecha nueva no es None => lo consideramos "nueva llegada".
+        #
+        if "Stock" in df.columns:
+            if (fecha_llegada_nueva != fecha_llegada_actual) and pd.notna(fecha_llegada_nueva):
+                nuevo_stock = stock_actual + uds_actual
+                df.at[row_index, "Stock"] = nuevo_stock
+                st.info(f"Se han añadido {uds_actual} Uds. a Stock. Queda un total de {nuevo_stock}.")
+
+        # 2) Creamos un nuevo archivo en versions
         new_file = crear_nueva_version_filename()
 
-        # 2) Actualizamos df en memoria
+        # 3) Actualizamos df en memoria (resto de columnas)
         if "NºLote" in df.columns:
             df.at[row_index, "NºLote"] = int(lote_nuevo)
         if "Caducidad" in df.columns:
@@ -221,7 +235,7 @@ if data_dict:
         if "Sitio almacenaje" in df.columns:
             df.at[row_index, "Sitio almacenaje"] = sitio_almacenaje_nuevo
 
-        # 3) Guardar la versión con fecha/hora en disco
+        # 4) Guardar la versión con fecha/hora en disco
         with pd.ExcelWriter(new_file, engine="openpyxl") as writer:
             for sht, df_sheet in data_dict.items():
                 if sht == sheet_name:
@@ -229,7 +243,7 @@ if data_dict:
                 else:
                     df_sheet.to_excel(writer, sheet_name=sht, index=False)
 
-        # 4) Guardar TAMBIÉN en nuestro archivo de trabajo (STOCK_FILE)
+        # 5) Guardar TAMBIÉN en nuestro archivo de trabajo (STOCK_FILE)
         with pd.ExcelWriter(STOCK_FILE, engine="openpyxl") as writer:
             for sht, df_sheet in data_dict.items():
                 if sht == sheet_name:
@@ -239,7 +253,7 @@ if data_dict:
 
         st.success(f"✅ Cambios guardados en '{new_file}' y '{STOCK_FILE}'.")
 
-        # 5) Generar Excel actualizado en memoria para descargar
+        # 6) Generar Excel actualizado en memoria para descargar
         excel_bytes = generar_excel_en_memoria(df, sheet_nm=sheet_name)
         st.download_button(
             label="Descargar Excel con la tabla modificada",
