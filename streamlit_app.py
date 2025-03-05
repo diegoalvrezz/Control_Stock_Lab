@@ -18,6 +18,23 @@ try:
 except ImportError:
     st.error("❌ Falta la librería 'openpyxl'. Instálala con 'pip install openpyxl'.")
 
+
+file_path = "Stock_Modificadov1.xlsx"
+
+
+
+
+try:
+    df_test = pd.read_excel(file_path, engine="openpyxl")
+    print("✅ Pandas puede leer el archivo correctamente.")
+    print(df_test.head())  # Muestra las primeras filas como prueba
+except FileNotFoundError:
+    print("❌ Pandas sigue sin encontrar el archivo.")
+except Exception as e:
+    print(f"⚠️ Otro error ocurrió: {e}")
+
+
+
 # Función para cargar los datos desde Excel
 def load_data():
     try:
