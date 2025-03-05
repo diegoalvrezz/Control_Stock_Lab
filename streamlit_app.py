@@ -8,7 +8,7 @@ import os
 st.title("📦 Control de Stock del Hospital")
 
 # Ruta del archivo principal
-file_path = "/workspaces/blank-app/Stock_Modificadov1.xlsx"
+file_path = "Stock_Modificadov1.xlsx"
 backup_folder = "backups"
 os.makedirs(backup_folder, exist_ok=True)  # Crear carpeta de backups si no existe
 
@@ -17,23 +17,6 @@ try:
     import openpyxl
 except ImportError:
     st.error("❌ Falta la librería 'openpyxl'. Instálala con 'pip install openpyxl'.")
-
-
-file_path = "Stock_Modificadov1.xlsx"
-
-
-
-
-try:
-    df_test = pd.read_excel(file_path, engine="openpyxl")
-    print("✅ Pandas puede leer el archivo correctamente.")
-    print(df_test.head())  # Muestra las primeras filas como prueba
-except FileNotFoundError:
-    print("❌ Pandas sigue sin encontrar el archivo.")
-except Exception as e:
-    print(f"⚠️ Otro error ocurrió: {e}")
-
-
 
 # Función para cargar los datos desde Excel
 def load_data():
@@ -71,6 +54,13 @@ if data:
     fecha_llegada = st.date_input("Fecha Llegada", value=pd.to_datetime(df.at[row_index, "Fecha Llegada"], errors='coerce') if pd.notna(df.at[row_index, "Fecha Llegada"]) else None)
     sitio_almacenaje = st.text_input("Sitio de Almacenaje", value=df.at[row_index, "Sitio almacenaje"] if pd.notna(df.at[row_index, "Sitio almacenaje"]) else "")
     
+    # Asegurar tipos correctos antes de guardar
+    df["NºLote"] = pd.to_numeric(df["NºLote"], errors="coerce").astype("Int64")
+    df["Caducidad"] = pd.to_datetime(df["Caducidad"], errors="coerce")
+    df["Fecha Pedida"] = pd.to_datetime(df["Fecha Pedida"], errors="coerce")
+    df["Fecha Llegada"] = pd.to_datetime(df["Fecha Llegada"], errors="coerce")
+    df["Sitio almacenaje"] = df["Sitio almacenaje"].astype(str)
+    
     # Función para hacer copias de seguridad cada vez que se haga un cambio
     def guardar_copia_seguridad():
         fecha_hora = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -83,17 +73,17 @@ if data:
         guardar_copia_seguridad()  # Hacer una copia antes de modificar
         
         # Actualizar los valores en la base de datos
-        df.at[row_index, "NºLote"] = lote
-        df.at[row_index, "Caducidad"] = caducidad
-        df.at[row_index, "Fecha Pedida"] = fecha_pedida
-        df.at[row_index, "Fecha Llegada"] = fecha_llegada
-        df.at[row_index, "Sitio almacenaje"] = sitio_almacenaje
+        df.at[row_index, "NºLote"] = int(lote) if pd.notna(lote) else None
+        df.at[row_index, "Caducidad"] = caducidad.strftime("%Y-%m-%d") if pd.notna(caducidad) else None
+        df.at[row_index, "Fecha Pedida"] = fecha_pedida.strftime("%Y-%m-%d") if pd.notna(fecha_pedida) else None
+        df.at[row_index, "Fecha Llegada"] = fecha_llegada.strftime("%Y-%m-%d") if pd.notna(fecha_llegada) else None
+        df.at[row_index, "Sitio almacenaje"] = str(sitio_almacenaje) if pd.notna(sitio_almacenaje) else ""
         
         # Guardar los cambios en Excel
         with pd.ExcelWriter(file_path, engine="openpyxl") as writer:
             for sheet, data in data.items():
                 if sheet == sheet_name:
-                    data.to_excel(writer, sheet_name=sheet, index=False)
+                    df.to_excel(writer, sheet_name=sheet, index=False)
                 else:
                     data.to_excel(writer, sheet_name=sheet, index=False)
         
