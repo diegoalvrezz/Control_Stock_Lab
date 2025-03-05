@@ -199,30 +199,31 @@ if data_dict:
     # -------------------------------------------------------------------------
     # Generar PDF para descargar
     # -------------------------------------------------------------------------
+    def to_latin1_compatible(text):
+    # Quitar o reemplazar caracteres no soportados en latin-1
+    return text.encode("latin-1", errors="replace").decode("latin-1")
+
     def generar_pdf_de_df(dataframe: pd.DataFrame, titulo_pdf="Reporte Stock"):
-        """
-        Genera un PDF en memoria a partir del DataFrame.
-        Retorna los bytes del PDF.
-        """
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_font("Arial", size=12)
+    pdf = FPDF()
+    pdf.add_page()
+    # Usa la fuente estándar
+    pdf.set_font("Arial", size=12)
 
-        # Título
-        pdf.cell(200, 10, txt=titulo_pdf, ln=True, align="C")
+    pdf.cell(200, 10, txt=to_latin1_compatible(titulo_pdf), ln=True, align="C")
 
-        # Encabezados de columna
-        col_names = list(dataframe.columns)
-        encabezado = " | ".join(col_names)
-        pdf.cell(200, 10, txt=encabezado, ln=True)
+    col_names = list(dataframe.columns)
+    encabezado = " | ".join(to_latin1_compatible(col) for col in col_names)
+    pdf.cell(200, 10, txt=encabezado, ln=True)
 
-        # Filas del DF
-        for _, row_data in dataframe.iterrows():
-            row_str = " | ".join(str(row_data[col]) for col in col_names)
-            pdf.cell(200, 10, txt=row_str, ln=True)
+    for _, row_data in dataframe.iterrows():
+        row_str = " | ".join(to_latin1_compatible(str(row_data[col])) for col in col_names)
+        pdf.cell(200, 10, txt=row_str, ln=True)
 
-        # Retornamos los bytes del PDF en memoria
-        return pdf.output(dest="S").encode("latin-1")
+    # Devuelve PDF en memoria
+    return pdf.output(dest="S").encode("latin-1", errors="replace")
+
+
+
 
     # -------------------------------------------------------------------------
     # BOTÓN: GUARDAR CAMBIOS
