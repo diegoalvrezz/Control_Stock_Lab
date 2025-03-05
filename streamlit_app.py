@@ -175,14 +175,14 @@ if data_dict:
     subopcion = ""
     if sitio_top == "Congelador 1":
         cajones = [f"Cajón {i}" for i in range(1, 9)]  # 1..8
-        subopcion = st.selectbox("Cajón", cajones)
+        subopcion = st.selectbox("Cajón(1 Arriba, 8 Abajo)", cajones)
     elif sitio_top == "Congelador 2":
         cajones = [f"Cajón {i}" for i in range(1, 7)]  # 1..6
-        subopcion = st.selectbox("Cajón", cajones)
+        subopcion = st.selectbox("Cajón(1 Arriba, 6 Abajo)", cajones)
     elif sitio_top == "Frigorífico":
         # Balda 1..6 + Puerta
-        baldas = [f"Balda {i}" for i in range(1, 7)] + ["Puerta"]
-        subopcion = st.selectbox("Baldas", baldas)
+        baldas = [f"Balda {i}" for i in range(1, 8)] + ["Puerta"]
+        subopcion = st.selectbox("Baldas (1 Arriba, 7 Abajo)", baldas)
     else:
         # Tª Ambiente => sin subopción
         subopcion = ""
