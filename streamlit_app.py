@@ -66,7 +66,7 @@ if st.button("Limpiar Base de Datos"):
     if os.path.exists(ORIGINAL_FILE):
         shutil.copy(ORIGINAL_FILE, STOCK_FILE)
         st.success("✅ Base de datos restaurada al estado original.")
-        st.experimental_rerun()
+        st.rerun()
     else:
         st.error("❌ No se encontró la copia original en 'versions/Stock_Original.xlsx'.")
 
