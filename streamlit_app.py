@@ -204,23 +204,23 @@ if data_dict:
         return text.encode("latin-1", errors="replace").decode("latin-1")
 
     def generar_pdf_de_df(dataframe: pd.DataFrame, titulo_pdf="Reporte Stock"):
-    pdf = FPDF()
-    pdf.add_page()
-    # Usa la fuente estándar
-    pdf.set_font("Arial", size=12)
+        pdf = FPDF()
+        pdf.add_page()
+        # Usa la fuente estándar
+        pdf.set_font("Arial", size=12)
 
-    pdf.cell(200, 10, txt=to_latin1_compatible(titulo_pdf), ln=True, align="C")
+        pdf.cell(200, 10, txt=to_latin1_compatible(titulo_pdf), ln=True, align="C")
 
-    col_names = list(dataframe.columns)
-    encabezado = " | ".join(to_latin1_compatible(col) for col in col_names)
-    pdf.cell(200, 10, txt=encabezado, ln=True)
+        col_names = list(dataframe.columns)
+        encabezado = " | ".join(to_latin1_compatible(col) for col in col_names)
+        pdf.cell(200, 10, txt=encabezado, ln=True)
 
-    for _, row_data in dataframe.iterrows():
-        row_str = " | ".join(to_latin1_compatible(str(row_data[col])) for col in col_names)
-        pdf.cell(200, 10, txt=row_str, ln=True)
+        for _, row_data in dataframe.iterrows():
+            row_str = " | ".join(to_latin1_compatible(str(row_data[col])) for col in col_names)
+            pdf.cell(200, 10, txt=row_str, ln=True)
 
-    # Devuelve PDF en memoria
-    return pdf.output(dest="S").encode("latin-1", errors="replace")
+        # Devuelve PDF en memoria
+        return pdf.output(dest="S").encode("latin-1", errors="replace")
 
 
 
