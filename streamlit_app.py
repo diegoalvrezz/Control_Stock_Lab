@@ -232,4 +232,11 @@ if data_dict:
                     data_sheet.to_excel(writer, sheet_name=sheet, index=False)
 
         st.success("✅ Datos actualizados correctamente.")
-        st.rerun()  # Si tu versión de Streamlit es antigua, prueba st.experimental_rerun()
+        st.write("🔍 Vista previa de los datos tras actualizar:")
+        st.write(df)
+
+        # Esperar un momento antes de recargar (opcional)
+        import time
+        time.sleep(2)
+
+        st.rerun()
