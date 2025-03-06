@@ -156,35 +156,53 @@ for p in panel_order:
     for j, sublote_name in enumerate(sublots):
         sub_lot_metadata[(p, sublote_name)] = (panel_index[p], j, next(color_cycle))
 
-def find_sub_lot(nombre_prod:str):
-    """Devuelve (panelName, subloteName, esPrincipal)."""
+def find_sub_lot(nombre_prod: str):
+    """
+    Busca el grupo (sublote) para el reactivo comparando en minúsculas.
+    Retorna (panel, sublote, esPrincipal) si hay coincidencia, sino None.
+    """
+    nombre_prod_clean = str(nombre_prod).strip().lower()
     for p in panel_order:
-        subdict = LOTS_DATA[p]
+        subdict = LOTS_DATA.get(p, {})
         for sublote_name, reactivos in subdict.items():
-            if nombre_prod == sublote_name:
+            # Comparación exacta para el título principal
+            if nombre_prod_clean == sublote_name.strip().lower():
                 return (p, sublote_name, True)
-            if nombre_prod in reactivos:
-                return (p, sublote_name, False)
+            # Comparación con cada reactivo del grupo
+            for reactivo in reactivos:
+                if nombre_prod_clean == reactivo.strip().lower():
+                    return (p, sublote_name, False)
     return None
 
-def build_lote_info(df: pd.DataFrame):
-    """Crea col: PanelIdx, SubLoteIdx, EsPrincipal, Color para agrupar y colorear."""
+def build_lote_info(df: pd.DataFrame, panel_default=None):
+    """
+    Crea las columnas de agrupación y estilo:
+      - PanelIdx, SubLoteIdx, EsPrincipal y Color.
+    Si find_sub_lot no encuentra coincidencia, se asigna el grupo 'Otros'
+    del panel correspondiente (si panel_default está en panel_order).
+    """
     df = df.copy()
     df["PanelIdx"] = 999
     df["SubLoteIdx"] = 999
     df["EsPrincipal"] = False
     df["Color"] = ""
     for i, row in df.iterrows():
-        nombre_prod = row.get("Nombre producto","")
+        nombre_prod = row.get("Nombre producto", "")
         info = find_sub_lot(nombre_prod)
+        if not info and panel_default in panel_order:
+            info = (panel_default, "Otros", False)
+            # Si no existe en el mapping, lo creamos con índice alto para ordenarlo al final
+            if (panel_default, "Otros") not in sub_lot_metadata:
+                sub_lot_metadata[(panel_default, "Otros")] = (panel_index[panel_default], 100, "#FFFFFF")
         if info:
             p, sublote, is_main = info
-            (p_idx, s_idx, c) = sub_lot_metadata.get((p, sublote),(999,999,""))
-            df.at[i,"PanelIdx"] = p_idx
-            df.at[i,"SubLoteIdx"] = s_idx
-            df.at[i,"EsPrincipal"] = is_main
-            df.at[i,"Color"] = c
+            (p_idx, s_idx, c) = sub_lot_metadata.get((p, sublote), (999, 999, ""))
+            df.at[i, "PanelIdx"] = p_idx
+            df.at[i, "SubLoteIdx"] = s_idx
+            df.at[i, "EsPrincipal"] = is_main
+            df.at[i, "Color"] = c
     return df
+
 
 def calc_alarma(row):
     """Col 'Alarma': '🔴' si Stock=0 y FechaPed=None, '🟨' si Stock=0 y FechaPed!=None."""
