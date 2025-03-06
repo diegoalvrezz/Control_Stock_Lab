@@ -184,141 +184,137 @@ LOTS_DATA = {
     }
 }
 
-# -------------------------------------------------------------------------
-# CUERPO PRINCIPAL
-# -------------------------------------------------------------------------
-st.title("📦 Control de Stock: Alarmas + Reactivos Agotados + Gestión de Lotes")
+# -------------------------------------
+# BARRA LATERAL: Secciones pedidas
+# -------------------------------------
+with st.sidebar:
+    # 1) Ver / Gestionar versiones guardadas
+    st.header("🔎 Ver / Gestionar versiones guardadas")
+    if data_dict:
+        files = sorted(os.listdir(VERSIONS_DIR))
+        versions_no_original = [f for f in files if f != "Stock_Original.xlsx"]
+        if versions_no_original:
+            version_sel = st.selectbox("Selecciona una versión:", versions_no_original)
+            confirm_delete = False
 
-# 1) Ver / Gestionar versiones
-st.header("🔎 Ver / Gestionar versiones guardadas")
+            if version_sel:
+                file_path = os.path.join(VERSIONS_DIR, version_sel)
+                if os.path.isfile(file_path):
+                    with open(file_path, "rb") as excel_file:
+                        excel_bytes = excel_file.read()
+                    st.download_button(
+                        label=f"Descargar {version_sel}",
+                        data=excel_bytes,
+                        file_name=version_sel,
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+                if st.checkbox(f"Confirmar eliminación de '{version_sel}'"):
+                    confirm_delete = True
 
-if data_dict:
-    files = sorted(os.listdir(VERSIONS_DIR))
-    versions_no_original = [f for f in files if f != "Stock_Original.xlsx"]
-    if versions_no_original:
-        version_sel = st.selectbox("Selecciona una versión:", versions_no_original)
-        confirm_delete = False
-
-        if version_sel:
-            file_path = os.path.join(VERSIONS_DIR, version_sel)
-            if os.path.isfile(file_path):
-                with open(file_path, "rb") as excel_file:
-                    excel_bytes = excel_file.read()
-                st.download_button(
-                    label=f"Descargar {version_sel}",
-                    data=excel_bytes,
-                    file_name=version_sel,
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-            if st.checkbox(f"Confirmar eliminación de '{version_sel}'"):
-                confirm_delete = True
-
-            if st.button("Eliminar esta versión"):
-                if confirm_delete:
-                    try:
-                        os.remove(file_path)
-                        st.warning(f"Versión '{version_sel}' eliminada.")
-                        st.rerun()
-                    except:
-                        st.error("Error al intentar eliminar la versión.")
-                else:
-                    st.error("Marca la casilla de confirmación para eliminar la versión.")
-    else:
-        st.write("No hay versiones guardadas (excepto la original).")
-
-    if st.button("Eliminar TODAS las versiones (excepto original)"):
-        for f in versions_no_original:
-            try:
-                os.remove(os.path.join(VERSIONS_DIR, f))
-            except:
-                pass
-        st.info("Todas las versiones (excepto la original) han sido eliminadas.")
-        st.rerun()
-
-    if st.button("Eliminar TODAS las versiones excepto la última y la original"):
-        if len(versions_no_original) > 1:
-            sorted_vers = sorted(versions_no_original)
-            last_version = sorted_vers[-1]  # la última alfabéticamente
-            for f in versions_no_original:
-                if f != last_version:
-                    try:
-                        os.remove(os.path.join(VERSIONS_DIR, f))
-                    except:
-                        pass
-            st.info(f"Se han eliminado todas las versiones excepto: {last_version} y Stock_Original.xlsx")
-            st.rerun()
+                if st.button("Eliminar esta versión"):
+                    if confirm_delete:
+                        try:
+                            os.remove(file_path)
+                            st.warning(f"Versión '{version_sel}' eliminada.")
+                            st.rerun()
+                        except:
+                            st.error("Error al intentar eliminar la versión.")
+                    else:
+                        st.error("Marca la casilla de confirmación para eliminar la versión.")
         else:
-            st.write("Solo hay una versión o ninguna versión, no se elimina nada más.")
+            st.write("No hay versiones guardadas (excepto la original).")
 
-    if st.button("Limpiar Base de Datos"):
-        st.write("¿Seguro que quieres limpiar la base de datos?")
-        if st.checkbox("Sí, confirmar limpieza."):
-            original_path = os.path.join(VERSIONS_DIR, "Stock_Original.xlsx")
-            if os.path.exists(original_path):
-                shutil.copy(original_path, STOCK_FILE)
-                st.success("✅ Base de datos restaurada al estado original.")
+        if st.button("Eliminar TODAS las versiones (excepto original)"):
+            for f in versions_no_original:
+                try:
+                    os.remove(os.path.join(VERSIONS_DIR, f))
+                except:
+                    pass
+            st.info("Todas las versiones (excepto la original) han sido eliminadas.")
+            st.rerun()
+
+        if st.button("Eliminar TODAS las versiones excepto la última y la original"):
+            if len(versions_no_original) > 1:
+                sorted_vers = sorted(versions_no_original)
+                last_version = sorted_vers[-1]  # la última alfabéticamente
+                for f in versions_no_original:
+                    if f != last_version:
+                        try:
+                            os.remove(os.path.join(VERSIONS_DIR, f))
+                        except:
+                            pass
+                st.info(f"Se han eliminado todas las versiones excepto: {last_version} y Stock_Original.xlsx")
                 st.rerun()
             else:
-                st.error("❌ No se encontró la copia original en 'versions/Stock_Original.xlsx'.")
+                st.write("Solo hay una versión o ninguna versión, no se elimina nada más.")
 
-else:
-    st.error("No hay data_dict. Asegúrate de que existe Stock_Original.xlsx.")
-    st.stop()
-
-st.markdown("---")
-
-# 2) ALARMAS
-st.header("⚠️ Alarmas")
-st.write("Se muestra ALARMA ROJA si Stock=0 y Fecha Pedida es None, ALARMA NARANJA si Stock=0 y Fecha Pedida no es None.")
-
-for nombre_hoja, df_hoja in data_dict.items():
-    df_hoja = enforce_types(df_hoja)
-    if "Stock" in df_hoja.columns:
-        df_cero = df_hoja[df_hoja["Stock"] == 0]
-        if not df_cero.empty:
-            st.markdown(f"**Hoja: {nombre_hoja}**")
-            for idx, fila in df_cero.iterrows():
-                fecha_ped = fila.get("Fecha Pedida", None)
-                producto = fila.get("Nombre producto", f"Fila {idx}")
-                fisher = fila.get("Ref. Fisher", "")
-                if pd.isna(fecha_ped):
-                    st.error(f"[{producto} ({fisher})] => Stock=0 => ALARMA ROJA (No pedido)")
+        if st.button("Limpiar Base de Datos"):
+            st.write("¿Seguro que quieres limpiar la base de datos?")
+            if st.checkbox("Sí, confirmar limpieza."):
+                original_path = os.path.join(VERSIONS_DIR, "Stock_Original.xlsx")
+                if os.path.exists(original_path):
+                    shutil.copy(original_path, STOCK_FILE)
+                    st.success("✅ Base de datos restaurada al estado original.")
+                    st.rerun()
                 else:
-                    st.warning(f"[{producto} ({fisher})] => Stock=0 => ALARMA NARANJA (Pedido)")
+                    st.error("❌ No se encontró la copia original en 'versions/Stock_Original.xlsx'.")
+    else:
+        st.error("No hay data_dict. Asegúrate de que existe Stock_Original.xlsx.")
+        st.stop()
 
+    st.markdown("---")
+
+    # 2) ALARMAS
+    st.header("⚠️ Alarmas")
+    st.write("Se muestra ALARMA ROJA si Stock=0 y Fecha Pedida es None, ALARMA NARANJA si Stock=0 y Fecha Pedida no es None.")
+    for nombre_hoja, df_hoja in data_dict.items():
+        df_hoja = enforce_types(df_hoja)
+        if "Stock" in df_hoja.columns:
+            df_cero = df_hoja[df_hoja["Stock"] == 0]
+            if not df_cero.empty:
+                st.markdown(f"**Hoja: {nombre_hoja}**")
+                for idx, fila in df_cero.iterrows():
+                    fecha_ped = fila.get("Fecha Pedida", None)
+                    producto = fila.get("Nombre producto", f"Fila {idx}")
+                    fisher = fila.get("Ref. Fisher", "")
+                    if pd.isna(fecha_ped):
+                        st.error(f"[{producto} ({fisher})] => Stock=0 => ALARMA ROJA (No pedido)")
+                    else:
+                        st.warning(f"[{producto} ({fisher})] => Stock=0 => ALARMA NARANJA (Pedido)")
+
+    st.markdown("---")
+
+    # 3) Reactivo Agotado
+    st.header("Reactivo Agotado (Consumido en Lab)")
+    st.write("Selecciona la hoja y el reactivo, y cuántas unidades restar del stock sin necesidad de guardar cambios.")
+    hojas_agotado = list(data_dict.keys())
+    hoja_sel_consumo = st.selectbox("Hoja para consumir reactivo:", hojas_agotado, key="consumo_hoja_sel")
+    df_agotado = data_dict[hoja_sel_consumo].copy()
+    df_agotado = enforce_types(df_agotado)
+
+    if "Nombre producto" in df_agotado.columns and "Ref. Fisher" in df_agotado.columns:
+        disp_series_consumo = df_agotado.apply(lambda r: f"{r['Nombre producto']} ({r['Ref. Fisher']})", axis=1)
+    else:
+        disp_series_consumo = df_agotado.iloc[:, 0].astype(str)
+
+    reactivo_consumir = st.selectbox("Reactivo a consumir:", disp_series_consumo.unique(), key="select_reactivo_cons")
+    idx_cons = disp_series_consumo[disp_series_consumo == reactivo_consumir].index[0]
+    stock_cons_actual = df_agotado.at[idx_cons, "Stock"] if "Stock" in df_agotado.columns else 0
+
+    uds_consumidas = st.number_input("Uds. consumidas", min_value=0, step=1, key="uds_cons_laboratorio")
+
+    if st.button("Registrar Consumo en Lab"):
+        nuevo_stock = max(0, stock_cons_actual - uds_consumidas)
+        df_agotado.at[idx_cons, "Stock"] = nuevo_stock
+        st.warning(f"Se han consumido {uds_consumidas} uds. Stock final => {nuevo_stock}")
+
+        # Actualizamos en data_dict sin guardar en Excel
+        data_dict[hoja_sel_consumo] = df_agotado
+        st.success("No se ha creado versión nueva. Los datos se mantienen en memoria hasta 'Guardar Cambios'.")
+
+
+# 4) Gestión de Lotes (Diccionario) - en cuerpo principal
 st.markdown("---")
-
-# 3) Reactivo Agotado
-st.header("Reactivo Agotado (Consumido en Lab)")
-st.write("Selecciona la hoja y el reactivo, y cuántas unidades restar del stock sin necesidad de guardar cambios.")
-hojas_agotado = list(data_dict.keys())
-hoja_sel_consumo = st.selectbox("Hoja para consumir reactivo:", hojas_agotado, key="consumo_hoja_sel")
-df_agotado = data_dict[hoja_sel_consumo].copy()
-df_agotado = enforce_types(df_agotado)
-
-if "Nombre producto" in df_agotado.columns and "Ref. Fisher" in df_agotado.columns:
-    disp_series_consumo = df_agotado.apply(lambda r: f"{r['Nombre producto']} ({r['Ref. Fisher']})", axis=1)
-else:
-    disp_series_consumo = df_agotado.iloc[:, 0].astype(str)
-
-reactivo_consumir = st.selectbox("Reactivo a consumir:", disp_series_consumo.unique(), key="select_reactivo_cons")
-idx_cons = disp_series_consumo[disp_series_consumo == reactivo_consumir].index[0]
-stock_cons_actual = df_agotado.at[idx_cons, "Stock"] if "Stock" in df_agotado.columns else 0
-
-uds_consumidas = st.number_input("Uds. consumidas", min_value=0, step=1, key="uds_cons_laboratorio")
-
-if st.button("Registrar Consumo en Lab"):
-    nuevo_stock = max(0, stock_cons_actual - uds_consumidas)
-    df_agotado.at[idx_cons, "Stock"] = nuevo_stock
-    st.warning(f"Se han consumido {uds_consumidas} uds. Stock final => {nuevo_stock}")
-
-    # Actualizamos en data_dict sin guardar en Excel
-    data_dict[hoja_sel_consumo] = df_agotado
-    st.success("No se ha creado versión nueva. Los datos se mantienen en memoria hasta 'Guardar Cambios'.")
-
-st.markdown("---")
-
-# 4) Gestión de Lotes (Diccionario)
 st.header("Gestión de Lotes (diccionario)")
 st.write("Selecciona FOCUS, OCA u OCA PLUS, luego un sub-lote, y la hoja donde quieres añadir esos reactivos en bloque.")
 
@@ -328,28 +324,31 @@ sublotes_dict = LOTS_DATA[panel_sel]  # p.ej. "Panel Oncomine Focus..." : [...]
 sublote_opciones = list(sublotes_dict.keys())
 sublote_sel = st.selectbox("Selecciona Lote:", sublote_opciones, key="sublote_lote_sel")
 
-hojas_lotes = list(data_dict.keys())
-hoja_dest_lote = st.selectbox("Selecciona la hoja destino:", hojas_lotes, key="hoja_dest_lotes")
-df_dest_lote = data_dict[hoja_dest_lote].copy()
-df_dest_lote = enforce_types(df_dest_lote)
+if data_dict:
+    hojas_lotes = list(data_dict.keys())
+    hoja_dest_lote = st.selectbox("Selecciona la hoja destino:", hojas_lotes, key="hoja_dest_lotes")
+    df_dest_lote = data_dict[hoja_dest_lote].copy()
+    df_dest_lote = enforce_types(df_dest_lote)
 
-if st.button("Pedir Lote (Añadir a la hoja)"):
-    lista_reactivos = sublotes_dict[sublote_sel]
-    for reactivo_name in lista_reactivos:
-        new_row = {
-            "Nombre producto": reactivo_name,
-            "Ref. Fisher": "",
-            "Uds.": 0,
-            "Stock": 0,
-        }
-        df_dest_lote = df_dest_lote.append(new_row, ignore_index=True)
+    if st.button("Pedir Lote (Añadir a la hoja)"):
+        lista_reactivos = sublotes_dict[sublote_sel]
+        for reactivo_name in lista_reactivos:
+            new_row = {
+                "Nombre producto": reactivo_name,
+                "Ref. Fisher": "",
+                "Uds.": 0,
+                "Stock": 0,
+            }
+            df_dest_lote = df_dest_lote.append(new_row, ignore_index=True)
 
-    data_dict[hoja_dest_lote] = df_dest_lote
-    st.success(f"Añadidos {len(lista_reactivos)} reactivos del lote '{sublote_sel}' a la hoja '{hoja_dest_lote}' (en memoria).")
-
-st.markdown("---")
+        data_dict[hoja_dest_lote] = df_dest_lote
+        st.success(f"Añadidos {len(lista_reactivos)} reactivos del lote '{sublote_sel}' a la hoja '{hoja_dest_lote}' (en memoria).")
+else:
+    st.error("No hay data_dict. Asegúrate de que existe Stock_Original.xlsx.")
+    st.stop()
 
 # 5) Edición en la hoja principal
+st.markdown("---")
 st.header("Edición en Hoja Principal y Guardado")
 hojas_principales = list(data_dict.keys())
 sheet_name = st.selectbox("Selecciona la hoja principal a editar:", hojas_principales, key="sheet_principal_sel")
