@@ -391,7 +391,7 @@ if data_dict:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
-        st.experimental_rerun()  # recargamos la app para refrescar la tabla
+        st.rerun()  # recargamos la app para refrescar la tabla
 
 # -------------------------------------------------------------------------
 # FUNCIÓN DE ESTILO para colorear filas
