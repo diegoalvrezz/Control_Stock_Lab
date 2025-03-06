@@ -104,7 +104,7 @@ def highlight_row(row):
     return [""] * len(row)
 
 # -------------------------------------------------------------------------
-# ESTRUCTURA DE LOTES (según tu mensaje)
+# ESTRUCTURA DE LOTES (diccionario)
 # -------------------------------------------------------------------------
 LOTS_DATA = {
     "FOCUS": {
@@ -332,6 +332,8 @@ if data_dict:
 
     if st.button("Pedir Lote (Añadir a la hoja)"):
         lista_reactivos = sublotes_dict[sublote_sel]
+        # USAMOS CONCAT EN LUGAR DE append (deprecado en pandas 2.0)
+        rows_to_add = []
         for reactivo_name in lista_reactivos:
             new_row = {
                 "Nombre producto": reactivo_name,
@@ -339,7 +341,9 @@ if data_dict:
                 "Uds.": 0,
                 "Stock": 0,
             }
-            df_dest_lote = df_dest_lote.append(new_row, ignore_index=True)
+            rows_to_add.append(new_row)
+        df_to_concat = pd.DataFrame(rows_to_add)
+        df_dest_lote = pd.concat([df_dest_lote, df_to_concat], ignore_index=True)
 
         data_dict[hoja_dest_lote] = df_dest_lote
         st.success(f"Añadidos {len(lista_reactivos)} reactivos del lote '{sublote_sel}' a la hoja '{hoja_dest_lote}' (en memoria).")
