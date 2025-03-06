@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import datetime
 import shutil
 import os
@@ -41,10 +42,9 @@ def load_data():
 data_dict = load_data()
 
 # -------------------------------------------------------------------------
-# FUNCIÓN PARA CONVERSIONES DE TIPOS
+# FUNCIÓN PARA CONVERSIONES DE TIPOS (eliminamos 'Restantes')
 # -------------------------------------------------------------------------
 def enforce_types(df: pd.DataFrame):
-    """Convertir columnas a los tipos deseados."""
     if "Ref. Saturno" in df.columns:
         df["Ref. Saturno"] = pd.to_numeric(df["Ref. Saturno"], errors="coerce").fillna(0).astype(int)
     if "Ref. Fisher" in df.columns:
@@ -57,7 +57,6 @@ def enforce_types(df: pd.DataFrame):
         df["Uds."] = pd.to_numeric(df["Uds."], errors="coerce").fillna(0).astype(int)
     if "NºLote" in df.columns:
         df["NºLote"] = pd.to_numeric(df["NºLote"], errors="coerce").fillna(0).astype(int)
-    # Eliminamos la columna "Restantes" del enforce (no la usamos)
     for col in ["Caducidad", "Fecha Pedida", "Fecha Llegada"]:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce")
@@ -68,7 +67,6 @@ def enforce_types(df: pd.DataFrame):
     return df
 
 def crear_nueva_version_filename():
-    """Generar nombre de archivo con fecha/hora para la carpeta 'versions'."""
     fecha_hora = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     return os.path.join(VERSIONS_DIR, f"Stock_{fecha_hora}.xlsx")
 
@@ -81,28 +79,26 @@ def generar_excel_en_memoria(df_act: pd.DataFrame, sheet_nm="Hoja1"):
     return output.getvalue()
 
 # -------------------------------------------------------------------------
-# LÓGICA PARA RESALTAR FILAS ROJAS O NARANJAS
+# LÓGICA PARA RESALTAR FILAS ROJAS O NARANJAS (opacidad reducida)
 # -------------------------------------------------------------------------
 def highlight_row(row):
     """
     - ALARMA ROJA => (stock=0) y (Fecha Pedida es None)
     - ALARMA NARANJA => (stock=0) y (Fecha Pedida != None)
-    
-    Con colores más suaves, usando rgba.
     """
     stock_val = row.get("Stock", None)
     fecha_pedida_val = row.get("Fecha Pedida", None)
 
     if pd.isna(stock_val):
-        return [""] * len(row)  # sin estilo
+        return [""] * len(row)
 
     if stock_val == 0:
         if pd.isna(fecha_pedida_val):
             # color rojo translúcido
-            return ['background-color: rgba(255, 0, 0, 0.3); color: black'] * len(row)
+            return ['background-color: rgba(255, 0, 0, 0.2); color: black'] * len(row)
         else:
             # color naranja translúcido
-            return ['background-color: rgba(255, 165, 0, 0.3); color: black'] * len(row)
+            return ['background-color: rgba(255, 165, 0, 0.2); color: black'] * len(row)
 
     return [""] * len(row)
 
@@ -120,6 +116,9 @@ with st.sidebar:
         versions_no_original = [f for f in files if f != "Stock_Original.xlsx"]
         if versions_no_original:
             version_sel = st.selectbox("Selecciona una versión:", versions_no_original)
+            # Añadimos un campo de confirmación de acción
+            confirm_delete = False
+
             if version_sel:
                 file_path = os.path.join(VERSIONS_DIR, version_sel)
                 if os.path.isfile(file_path):
@@ -131,13 +130,20 @@ with st.sidebar:
                         file_name=version_sel,
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
+                # Mensaje de confirmación con un "checkbox"
+                if st.checkbox(f"Confirmar eliminación de '{version_sel}'"):
+                    confirm_delete = True
+
                 if st.button("Eliminar esta versión"):
-                    try:
-                        os.remove(file_path)
-                        st.warning(f"Versión '{version_sel}' eliminada.")
-                        st.rerun()
-                    except:
-                        st.error("Error al intentar eliminar la versión.")
+                    if confirm_delete:
+                        try:
+                            os.remove(file_path)
+                            st.warning(f"Versión '{version_sel}' eliminada.")
+                            st.rerun()
+                        except:
+                            st.error("Error al intentar eliminar la versión.")
+                    else:
+                        st.error("Marca la casilla de confirmación para eliminar la versión.")
         else:
             st.write("No hay versiones guardadas (excepto la original).")
 
@@ -150,13 +156,11 @@ with st.sidebar:
             st.info("Todas las versiones (excepto la original) han sido eliminadas.")
             st.rerun()
 
-        # (3) Botón extra: eliminar todas las versiones excepto la última y la original
+        # Botón extra: eliminar todas las versiones excepto la última y la original
         if st.button("Eliminar TODAS las versiones excepto la última y la original"):
-            # Ordenamos la lista al revés y cogemos la primera como la "última"
             if len(versions_no_original) > 1:
                 sorted_vers = sorted(versions_no_original)
-                last_version = sorted_vers[-1]  # la última (alfabéticamente)
-                # Eliminamos todas menos last_version
+                last_version = sorted_vers[-1]  # la última alfabéticamente
                 for f in versions_no_original:
                     if f != last_version:
                         try:
@@ -166,16 +170,18 @@ with st.sidebar:
                 st.info(f"Se han eliminado todas las versiones excepto: {last_version} y Stock_Original.xlsx")
                 st.rerun()
             else:
-                st.write("Solo hay una versión (o ninguna), no se elimina nada más.")
+                st.write("Solo hay una versión o ninguna versión, no se elimina nada más.")
 
     # Botón para limpiar base
     if st.button("Limpiar Base de Datos"):
-        if os.path.exists(ORIGINAL_FILE):
-            shutil.copy(ORIGINAL_FILE, STOCK_FILE)
-            st.success("✅ Base de datos restaurada al estado original.")
-            st.rerun()
-        else:
-            st.error("❌ No se encontró la copia original en 'versions/Stock_Original.xlsx'.")
+        st.write("¿Seguro que quieres limpiar la base de datos?")
+        if st.checkbox("Sí, confirmar limpieza."):
+            if os.path.exists(ORIGINAL_FILE):
+                shutil.copy(ORIGINAL_FILE, STOCK_FILE)
+                st.success("✅ Base de datos restaurada al estado original.")
+                st.rerun()
+            else:
+                st.error("❌ No se encontró la copia original en 'versions/Stock_Original.xlsx'.")
 
     st.markdown("---")
     # Expander Alarmas
@@ -205,13 +211,13 @@ with st.sidebar:
         else:
             st.info("No se han cargado datos o no existe la base de datos.")
 
-    # (2) Botón Reactivo Agotado
     st.markdown("---")
+    # Botón Reactivo Agotado
     st.markdown("### Reactivo Agotado en el Laboratorio")
     st.write("Selecciona la hoja y el reactivo, y cuántas unidades restar del stock.")
     if data_dict:
-        # Escoger la categoría de stock
-        hoja_para_consumo = st.selectbox("Selecciona la categoría (OCA, OCA PLUS, FOCUS, etc.)", list(data_dict.keys()), key="hoja_agotado")
+        hojas_opciones = list(data_dict.keys())
+        hoja_para_consumo = st.selectbox("Selecciona la categoría de stock:", hojas_opciones, key="hoja_agotado")
         df_temp = data_dict[hoja_para_consumo].copy()
         df_temp = enforce_types(df_temp)
 
@@ -229,12 +235,10 @@ with st.sidebar:
         uds_consumidas = st.number_input("Unidades consumidas en Lab", min_value=0, step=1, key="uds_consumidas")
 
         if st.button("Registrar Consumo", key="consumir_lab"):
-            # Resta al stock sin caer por debajo de 0
             nuevo_stock = max(0, stock_actual_agotado - uds_consumidas)
             df_temp.at[row_idx_agotado, "Stock"] = nuevo_stock
             st.warning(f"Se han consumido {uds_consumidas} uds. Stock final => {nuevo_stock}")
 
-            # Guardar en disco y en versión
             new_file2 = crear_nueva_version_filename()
             data_dict[hoja_para_consumo] = df_temp  # actualizamos en memoria
 
@@ -265,17 +269,18 @@ with st.sidebar:
 # CUERPO PRINCIPAL
 # -------------------------------------------------------------------------
 if data_dict:
-    sheet_name = st.selectbox("Selecciona la categoría de stock:", list(data_dict.keys()))
+    sheet_name = st.selectbox("Selecciona la categoría de stock (principal):", list(data_dict.keys()))
     df = data_dict[sheet_name].copy()
     df = enforce_types(df)
 
     st.markdown(f"### Hoja seleccionada: **{sheet_name}**")
 
-    # 1) Creamos un df con estilo que marque filas rojas/naranjas con opacidad reducida
-    styled_df = df.style.apply(highlight_row, axis=1)
+    # Reemplazar NaT / NaN por "-"
+    df_display = df.copy()
+    # fillna("-") => convertimos tanto nan como NaT en "-"
+    df_display = df_display.fillna("-")
 
-    # 2) Lo mostramos con st.write(styled_df.to_html(), unsafe_allow_html=True)
-    #    para permitir estilos en la tabla
+    styled_df = df_display.style.apply(highlight_row, axis=1)
     st.write(styled_df.to_html(), unsafe_allow_html=True)
 
     # Selecciona reactivo a modificar
@@ -301,8 +306,7 @@ if data_dict:
 
     st.markdown("#### Modificar Atributos de Reactivo")
 
-    # Capturamos la fecha y hora para 'Fecha Pedida' y 'Fecha Llegada'
-    colA, colB, colC = st.columns(3)
+    colA, colB, colC, colD = st.columns([1,1,1,1])
     with colA:
         lote_nuevo = st.number_input("Nº de Lote", value=int(lote_actual), step=1)
         caducidad_nueva = st.date_input("Caducidad", value=caducidad_actual if pd.notna(caducidad_actual) else None)
@@ -316,6 +320,13 @@ if data_dict:
         # Fecha llegada => date + time
         fecha_llegada_date = st.date_input("Fecha Llegada (fecha)", value=fecha_llegada_actual.date() if pd.notna(fecha_llegada_actual) else None, key="fl_date")
         fecha_llegada_time = st.time_input("Hora Llegada", value=fecha_llegada_actual.time() if pd.notna(fecha_llegada_actual) else datetime.time(0, 0), key="fl_time")
+
+    with colD:
+        st.write("")  # Espacio
+        st.write("")
+        # Botón para refrescar
+        if st.button("Refrescar Página"):
+            st.rerun()
 
     # Unimos date+time a un Timestamp
     fecha_pedida_nueva = None
@@ -352,6 +363,7 @@ if data_dict:
     else:
         sitio_almacenaje_nuevo = sitio_top
 
+    # Botón Guardar Cambios
     if st.button("Guardar Cambios"):
         # Si se introduce Fecha Llegada, borramos Fecha Pedida => "ya llegó"
         if pd.notna(fecha_llegada_nueva):
@@ -365,7 +377,7 @@ if data_dict:
 
         new_file = crear_nueva_version_filename()
 
-        # Actualizar df
+        # Actualizar df en data_dict
         if "NºLote" in df.columns:
             df.at[row_index, "NºLote"] = int(lote_nuevo)
         if "Caducidad" in df.columns:
@@ -377,21 +389,17 @@ if data_dict:
         if "Sitio almacenaje" in df.columns:
             df.at[row_index, "Sitio almacenaje"] = sitio_almacenaje_nuevo
 
+        data_dict[sheet_name] = df
+
         # Guardar versión
         with pd.ExcelWriter(new_file, engine="openpyxl") as writer:
             for sht, df_sheet in data_dict.items():
-                if sht == sheet_name:
-                    df.to_excel(writer, sheet_name=sht, index=False)
-                else:
-                    df_sheet.to_excel(writer, sheet_name=sht, index=False)
+                df_sheet.to_excel(writer, sheet_name=sht, index=False)
 
         # Guardar en STOCK_FILE
         with pd.ExcelWriter(STOCK_FILE, engine="openpyxl") as writer:
             for sht, df_sheet in data_dict.items():
-                if sht == sheet_name:
-                    df.to_excel(writer, sheet_name=sht, index=False)
-                else:
-                    df_sheet.to_excel(writer, sheet_name=sht, index=False)
+                df_sheet.to_excel(writer, sheet_name=sht, index=False)
 
         st.success(f"✅ Cambios guardados en '{new_file}' y '{STOCK_FILE}'.")
 
@@ -402,5 +410,5 @@ if data_dict:
             file_name="Reporte_Stock.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-
+        
         st.rerun()
