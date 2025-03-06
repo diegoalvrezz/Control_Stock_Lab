@@ -57,11 +57,14 @@ def enforce_types(df: pd.DataFrame):
         df["Uds."] = pd.to_numeric(df["Uds."], errors="coerce").fillna(0).astype(int)
     if "NºLote" in df.columns:
         df["NºLote"] = pd.to_numeric(df["NºLote"], errors="coerce").fillna(0).astype(int)
+    # Convertir a datetime las columnas de fechas
     for col in ["Caducidad", "Fecha Pedida", "Fecha Llegada"]:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce")
+    # Almacenaje como str
     if "Sitio almacenaje" in df.columns:
         df["Sitio almacenaje"] = df["Sitio almacenaje"].astype(str)
+    # Stock a int
     if "Stock" in df.columns:
         df["Stock"] = pd.to_numeric(df["Stock"], errors="coerce").fillna(0).astype(int)
     return df
@@ -116,7 +119,6 @@ with st.sidebar:
         versions_no_original = [f for f in files if f != "Stock_Original.xlsx"]
         if versions_no_original:
             version_sel = st.selectbox("Selecciona una versión:", versions_no_original)
-            # Añadimos un campo de confirmación de acción
             confirm_delete = False
 
             if version_sel:
@@ -130,7 +132,6 @@ with st.sidebar:
                         file_name=version_sel,
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
-                # Mensaje de confirmación con un "checkbox"
                 if st.checkbox(f"Confirmar eliminación de '{version_sel}'"):
                     confirm_delete = True
 
@@ -156,7 +157,6 @@ with st.sidebar:
             st.info("Todas las versiones (excepto la original) han sido eliminadas.")
             st.rerun()
 
-        # Botón extra: eliminar todas las versiones excepto la última y la original
         if st.button("Eliminar TODAS las versiones excepto la última y la original"):
             if len(versions_no_original) > 1:
                 sorted_vers = sorted(versions_no_original)
@@ -172,7 +172,6 @@ with st.sidebar:
             else:
                 st.write("Solo hay una versión o ninguna versión, no se elimina nada más.")
 
-    # Botón para limpiar base
     if st.button("Limpiar Base de Datos"):
         st.write("¿Seguro que quieres limpiar la base de datos?")
         if st.checkbox("Sí, confirmar limpieza."):
@@ -184,7 +183,6 @@ with st.sidebar:
                 st.error("❌ No se encontró la copia original en 'versions/Stock_Original.xlsx'.")
 
     st.markdown("---")
-    # Expander Alarmas
     with st.expander("⚠️ Alarmas"):
         """
         Alarma:
@@ -212,7 +210,6 @@ with st.sidebar:
             st.info("No se han cargado datos o no existe la base de datos.")
 
     st.markdown("---")
-    # Botón Reactivo Agotado
     st.markdown("### Reactivo Agotado en el Laboratorio")
     st.write("Selecciona la hoja y el reactivo, y cuántas unidades restar del stock.")
     if data_dict:
@@ -275,15 +272,11 @@ if data_dict:
 
     st.markdown(f"### Hoja seleccionada: **{sheet_name}**")
 
-    # Reemplazar NaT / NaN por "-"
-    df_display = df.copy()
-    # fillna("-") => convertimos tanto nan como NaT en "-"
-    df_display = df_display.fillna("-")
-
-    styled_df = df_display.style.apply(highlight_row, axis=1)
+    # Creación de estilo para la tabla, con highlight
+    styled_df = df.style.apply(highlight_row, axis=1)
     st.write(styled_df.to_html(), unsafe_allow_html=True)
 
-    # Selecciona reactivo a modificar
+    # Seleccionar reactivo a modificar
     if "Nombre producto" in df.columns and "Ref. Fisher" in df.columns:
         display_series = df.apply(lambda row: f"{row['Nombre producto']} ({row['Ref. Fisher']})", axis=1)
     else:
@@ -313,13 +306,21 @@ if data_dict:
 
     with colB:
         # Fecha pedida => date + time
-        fecha_pedida_date = st.date_input("Fecha Pedida (fecha)", value=fecha_pedida_actual.date() if pd.notna(fecha_pedida_actual) else None, key="fp_date")
-        fecha_pedida_time = st.time_input("Hora Pedida", value=fecha_pedida_actual.time() if pd.notna(fecha_pedida_actual) else datetime.time(0, 0), key="fp_time")
+        fecha_pedida_date = st.date_input("Fecha Pedida (fecha)",
+                                          value=fecha_pedida_actual.date() if pd.notna(fecha_pedida_actual) else None,
+                                          key="fp_date")
+        fecha_pedida_time = st.time_input("Hora Pedida",
+                                          value=fecha_pedida_actual.time() if pd.notna(fecha_pedida_actual) else datetime.time(0, 0),
+                                          key="fp_time")
 
     with colC:
         # Fecha llegada => date + time
-        fecha_llegada_date = st.date_input("Fecha Llegada (fecha)", value=fecha_llegada_actual.date() if pd.notna(fecha_llegada_actual) else None, key="fl_date")
-        fecha_llegada_time = st.time_input("Hora Llegada", value=fecha_llegada_actual.time() if pd.notna(fecha_llegada_actual) else datetime.time(0, 0), key="fl_time")
+        fecha_llegada_date = st.date_input("Fecha Llegada (fecha)",
+                                           value=fecha_llegada_actual.date() if pd.notna(fecha_llegada_actual) else None,
+                                           key="fl_date")
+        fecha_llegada_time = st.time_input("Hora Llegada",
+                                           value=fecha_llegada_actual.time() if pd.notna(fecha_llegada_actual) else datetime.time(0, 0),
+                                           key="fl_time")
 
     with colD:
         st.write("")  # Espacio
@@ -328,7 +329,7 @@ if data_dict:
         if st.button("Refrescar Página"):
             st.rerun()
 
-    # Unimos date+time a un Timestamp
+    # Unir date+time
     fecha_pedida_nueva = None
     if fecha_pedida_date is not None:
         fecha_pedida_nueva = datetime.datetime.combine(fecha_pedida_date, fecha_pedida_time)
