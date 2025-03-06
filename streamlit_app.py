@@ -16,6 +16,7 @@ ORIGINAL_FILE = os.path.join(VERSIONS_DIR, "Stock_Original.xlsx")
 os.makedirs(VERSIONS_DIR, exist_ok=True)
 
 def init_original():
+    """Si no existe 'versions/Stock_Original.xlsx', lo creamos a partir de STOCK_FILE."""
     if not os.path.exists(ORIGINAL_FILE):
         if os.path.exists(STOCK_FILE):
             shutil.copy(STOCK_FILE, ORIGINAL_FILE)
@@ -25,9 +26,10 @@ def init_original():
 init_original()
 
 def load_data():
+    """Lee todas las hojas en un dict {nombre_hoja: DataFrame} y quita 'Restantes'."""
     try:
         data = pd.read_excel(STOCK_FILE, sheet_name=None, engine="openpyxl")
-        # Borramos col "Restantes" si existe
+        # Borramos 'Restantes' si existe
         for sheet, df_sheet in data.items():
             if "Restantes" in df_sheet.columns:
                 df_sheet.drop(columns=["Restantes"], inplace=True, errors="ignore")
@@ -42,6 +44,7 @@ def load_data():
 data_dict = load_data()
 
 def enforce_types(df: pd.DataFrame):
+    """Fuerza tipos en las columnas más comunes."""
     if "Ref. Saturno" in df.columns:
         df["Ref. Saturno"] = pd.to_numeric(df["Ref. Saturno"], errors="coerce").fillna(0).astype(int)
     if "Ref. Fisher" in df.columns:
@@ -71,13 +74,14 @@ def crear_nueva_version_filename():
     return os.path.join(VERSIONS_DIR, f"Stock_{fecha_hora}.xlsx")
 
 def generar_excel_en_memoria(df_act: pd.DataFrame, sheet_nm="Hoja1"):
+    """Genera un Excel en memoria para descargar."""
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         df_act.to_excel(writer, index=False, sheet_name=sheet_nm)
     output.seek(0)
     return output.getvalue()
 
-# LOTES
+# ============= LÓGICA DE LOTES =============
 LOTS_DATA = {
     "FOCUS": {
         "Panel Oncomine Focus Library Assay Chef Ready": [
@@ -123,10 +127,15 @@ LOTS_DATA = {
 panel_order = ["FOCUS","OCA","OCA PLUS"]
 panel_index = {p:i for i,p in enumerate(panel_order)}
 
-colors = ["#FED7D7","#FEE2E2","#FFEDD5","#FEF9C3","#D9F99D","#CFFAFE","#E0E7FF","#FBCFE8","#F9A8D4","#E9D5FF",
-          "#FFD700","#F0FFF0","#D1FAE5","#BAFEE2","#A7F3D0","#FFEC99"]
+# Colores para sub-lotes
+colors = [
+    "#FED7D7","#FEE2E2","#FFEDD5","#FEF9C3","#D9F99D",
+    "#CFFAFE","#E0E7FF","#FBCFE8","#F9A8D4","#E9D5FF",
+    "#FFD700","#F0FFF0","#D1FAE5","#BAFEE2","#A7F3D0","#FFEC99"
+]
 color_cycle = itertools.cycle(colors)
 
+# (panel, sublote) -> (panelIdx, subloteIdx, color)
 sub_lot_metadata = {}
 for p in panel_order:
     subdict = LOTS_DATA.get(p,{})
@@ -134,26 +143,28 @@ for p in panel_order:
     for j, subl in enumerate(sublots):
         sub_lot_metadata[(p, subl)] = (panel_index[p], j, next(color_cycle))
 
-def find_sub_lot(nombre_prod: str):
+def find_sub_lot(nombre_prod:str):
+    """Retorna (panelName, subloteName, esPrincipal)."""
     for p in panel_order:
-        if p not in LOTS_DATA: continue
-        subdict = LOTS_DATA[p]
-        for sublote_name, reactives in subdict.items():
+        subdict = LOTS_DATA.get(p,{})
+        for sublote_name, reactivos in subdict.items():
             if nombre_prod == sublote_name:
                 return (p, sublote_name, True)
-            if nombre_prod in reactives:
+            if nombre_prod in reactivos:
                 return (p, sublote_name, False)
     return None
 
 def build_lote_info(df: pd.DataFrame):
+    """Agrega col: PanelIdx, SubLoteIdx, EsPrincipal, Color para agrupar/colorear. 
+       Se ocultarán después."""
     df = df.copy()
     df["PanelIdx"] = 999
     df["SubLoteIdx"] = 999
     df["EsPrincipal"] = False
     df["Color"] = ""
-    for i,row in df.iterrows():
-        name_prod = row.get("Nombre producto","")
-        info = find_sub_lot(name_prod)
+    for i, row in df.iterrows():
+        nombre_prod = row.get("Nombre producto","")
+        info = find_sub_lot(nombre_prod)
         if info:
             p, sl, is_main = info
             (p_idx, s_idx, c) = sub_lot_metadata.get((p, sl),(999,999,""))
@@ -164,23 +175,26 @@ def build_lote_info(df: pd.DataFrame):
     return df
 
 def calc_alarma(row):
-    s = row.get("Stock",0)
-    fp = row.get("Fecha Pedida",None)
-    if s==0 and pd.isna(fp):
+    """'Alarma': '🔴' si Stock=0 y Fecha Pedida=None, '🟨' si Stock=0 y FechaPed !=None."""
+    stock_val = row.get("Stock",0)
+    fecha_ped = row.get("Fecha Pedida",None)
+    if stock_val == 0 and pd.isna(fecha_ped):
         return "🔴"
-    elif s==0 and not pd.isna(fp):
+    elif stock_val == 0 and not pd.isna(fecha_ped):
         return "🟨"
     return ""
 
 def style_lote(row):
+    """Aplica color a toda la fila, y si es sub-lote principal (EsPrincipal=True) pone 'Nombre producto' en negrita."""
     bg = row.get("Color","")
-    is_main = row.get("EsPrincipal",False)
+    es_main = row.get("EsPrincipal",False)
     styles = [f"background-color:{bg}"]*len(row)
-    if is_main:
+    if es_main:
         if "Nombre producto" in row.index:
             idx = row.index.get_loc("Nombre producto")
             styles[idx]+= "; font-weight:bold"
     return styles
+
 
 # BARRA LATERAL
 with st.sidebar:
@@ -189,7 +203,7 @@ with st.sidebar:
             files = sorted(os.listdir(VERSIONS_DIR))
             versions_no_original = [f for f in files if f != "Stock_Original.xlsx"]
             if versions_no_original:
-                version_sel = st.selectbox("Selecciona una versión:", versions_no_original)
+                version_sel = st.selectbox("Selecciona versión:", versions_no_original)
                 confirm_delete = False
 
                 if version_sel:
@@ -254,45 +268,44 @@ with st.sidebar:
                     else:
                         st.error("❌ No se encontró la copia original en 'versions/Stock_Original.xlsx'.")
         else:
-            st.error("No hay data_dict. Asegúrate de que existe Stock_Original.xlsx.")
+            st.error("No hay data_dict. Verifica Stock_Original.xlsx.")
             st.stop()
 
     with st.expander("⚠️ Alarmas", expanded=False):
-        st.write("En la columna 'Alarma' verás:")
-        st.write("- `'🔴'` si `Stock=0` y `Fecha Pedida` es nula.")
-        st.write("- `'🟨'` si `Stock=0` y `Fecha Pedida` no es nula.")
+        st.write("Col 'Alarma':")
+        st.write("- '🔴' => Stock=0 y FechaPed=None")
+        st.write("- '🟨' => Stock=0 y FechaPed!=None")
 
     with st.expander("Reactivo Agotado (Consumido en Lab)", expanded=False):
         if data_dict:
-            st.write("Selecciona la hoja y el reactivo a consumir del stock.")
+            st.write("Selecciona la hoja y reactivo para consumir stock sin crear versión.")
             hojas_agotado = list(data_dict.keys())
-            hoja_sel_consumo = st.selectbox("Hoja para consumir reactivo:", hojas_agotado, key="consumo_hoja_sel")
+            hoja_sel_consumo = st.selectbox("Hoja a consumir:", hojas_agotado, key="cons_hoja_sel")
             df_agotado = data_dict[hoja_sel_consumo].copy()
             df_agotado = enforce_types(df_agotado)
 
             if "Nombre producto" in df_agotado.columns and "Ref. Fisher" in df_agotado.columns:
-                disp_series_consumo = df_agotado.apply(lambda r: f"{r['Nombre producto']} ({r['Ref. Fisher']})", axis=1)
+                disp_consumo = df_agotado.apply(lambda r: f"{r['Nombre producto']} ({r['Ref. Fisher']})", axis=1)
             else:
-                disp_series_consumo = df_agotado.iloc[:, 0].astype(str)
+                disp_consumo = df_agotado.iloc[:,0].astype(str)
 
-            reactivo_consumir = st.selectbox("Reactivo a consumir:", disp_series_consumo.unique(), key="select_reactivo_cons")
-            idx_cons = disp_series_consumo[disp_series_consumo == reactivo_consumir].index[0]
-            stock_cons_actual = df_agotado.at[idx_cons, "Stock"] if "Stock" in df_agotado.columns else 0
+            reactivo_consumir = st.selectbox("Reactivo:", disp_consumo.unique(), key="cons_react_sel")
+            idx_c = disp_consumo[disp_consumo==reactivo_consumir].index[0]
+            stock_c = df_agotado.at[idx_c,"Stock"] if "Stock" in df_agotado.columns else 0
 
-            uds_consumidas = st.number_input("Uds. consumidas", min_value=0, step=1, key="uds_cons_laboratorio")
-
+            uds_consumidas = st.number_input("Uds. consumidas", min_value=0, step=1)
             if st.button("Registrar Consumo en Lab"):
-                nuevo_stock = max(0, stock_cons_actual - uds_consumidas)
-                df_agotado.at[idx_cons, "Stock"] = nuevo_stock
-                st.warning(f"Se han consumido {uds_consumidas} uds. Stock final => {nuevo_stock}")
+                nuevo_stock = max(0, stock_c - uds_consumidas)
+                df_agotado.at[idx_c,"Stock"] = nuevo_stock
+                st.warning(f"Consumidas {uds_consumidas} uds. Stock final => {nuevo_stock}")
                 data_dict[hoja_sel_consumo] = df_agotado
-                st.success("No se crea versión nueva, cambios solo en memoria.")
+                st.success("No se genera versión, queda en memoria.")
         else:
-            st.error("No hay data_dict. Asegúrate de que existe Stock_Original.xlsx.")
+            st.error("No hay data_dict. Revisa Stock_Original.xlsx.")
             st.stop()
 
-# CUERPO PRINCIPAL
-st.title("📦 Control de Stock: Lotes agrupados + Alarmas con íconos")
+# CUERPO
+st.title("📦 Control de Stock: Lotes agrupados + Alarmas con íconos (Ocultando columnas internas)")
 
 if not data_dict:
     st.error("No se pudo cargar la base de datos.")
@@ -302,38 +315,45 @@ st.markdown("---")
 st.header("Edición en Hoja Principal y Guardado")
 
 hojas_principales = list(data_dict.keys())
-sheet_name = st.selectbox("Selecciona la hoja a editar:", hojas_principales, key="sheet_principal_sel")
-df_main = data_dict[sheet_name].copy()
-df_main = enforce_types(df_main)
+sheet_name = st.selectbox("Selecciona la hoja a editar:", hojas_principales, key="main_sheet_sel")
+df_main_original = data_dict[sheet_name].copy()
+df_main_original = enforce_types(df_main_original)
 
-# Creamos col 'Alarma'
-df_main["Alarma"] = df_main.apply(calc_alarma, axis=1)
-df_main = build_lote_info(df_main)
-
+# ---- A) Creamos df_for_style con col extra y ordenado
+df_for_style = df_main_original.copy()
+# Columna Alarma
+df_for_style["Alarma"] = df_for_style.apply(calc_alarma, axis=1)
+# Info de Lotes
+df_for_style = build_lote_info(df_for_style)
 # Ordenamos
-df_main.sort_values(by=["PanelIdx","SubLoteIdx","EsPrincipal"], ascending=[True,True,False], inplace=True)
-df_main.reset_index(drop=True, inplace=True)
+df_for_style.sort_values(by=["PanelIdx","SubLoteIdx","EsPrincipal"], ascending=[True,True,False], inplace=True)
+df_for_style.reset_index(drop=True, inplace=True)
 
-# Estilo
-styled_df = df_main.style.apply(style_lote, axis=1)
+# Generamos styler
+styled_df = df_for_style.style.apply(style_lote, axis=1)
 
-# Ocultamos las col de control en la vista
-all_cols = df_main.columns.tolist()
-# quitamos "PanelIdx","SubLoteIdx","EsPrincipal","Color" de la visual
-cols_to_show = [c for c in all_cols if c not in ["PanelIdx","SubLoteIdx","EsPrincipal","Color"]]
+# B) Obtenemos HTML de la tabla sin mostrar las 4 col internas
+all_cols = df_for_style.columns.tolist()
+cols_to_hide = ["PanelIdx","SubLoteIdx","EsPrincipal","Color"]
+final_cols = [c for c in all_cols if c not in cols_to_hide]
+table_html = styled_df.to_html(columns=final_cols)
 
-html_table = styled_df.to_html(columns=cols_to_show)
-st.write("#### Vista de la Hoja (Sin 'Restantes', con columna 'Alarma', sub-lotes ordenados)")
-st.write(html_table, unsafe_allow_html=True)
+# C) Reemplazamos df_main por la versión final (sin col internas)
+df_main = df_for_style.copy()
+df_main.drop(columns=cols_to_hide, inplace=True, errors="ignore")
 
-# Seleccionar Reactivo a Modificar
+# D) Mostramos la tabla
+st.write("#### Vista de la Hoja (col 'Alarma', sub-lotes, sin columnas internas ni 'Restantes')")
+st.write(table_html, unsafe_allow_html=True)
+
+# E) Seleccionar reactivo a modificar
 if "Nombre producto" in df_main.columns and "Ref. Fisher" in df_main.columns:
-    display_series = df_main.apply(lambda r: f"{r['Nombre producto']} ({r['Ref. Fisher']})", axis=1)
+    display_series = df_main.apply(lambda row: f"{row['Nombre producto']} ({row['Ref. Fisher']})", axis=1)
 else:
-    display_series = df_main.iloc[:, 0].astype(str)
+    display_series = df_main.iloc[:,0].astype(str)
 
-reactivo = st.selectbox("Selecciona Reactivo a Modificar:", display_series.unique(), key="reactivo_modif")
-row_index = display_series[display_series == reactivo].index[0]
+reactivo_sel = st.selectbox("Selecciona Reactivo a Modificar:", display_series.unique(), key="react_modif")
+row_index = display_series[display_series==reactivo_sel].index[0]
 
 def get_val(col, default=None):
     return df_main.at[row_index, col] if col in df_main.columns else default
@@ -350,7 +370,6 @@ cA,cB,cC,cD = st.columns([1,1,1,1])
 with cA:
     lote_nuevo = st.number_input("Nº de Lote", value=int(lote_actual), step=1)
     caducidad_nueva = st.date_input("Caducidad", value=caducidad_actual if pd.notna(caducidad_actual) else None)
-
 with cB:
     fp_date = st.date_input("Fecha Pedida (fecha)",
                             value=fecha_pedida_actual.date() if pd.notna(fecha_pedida_actual) else None,
@@ -358,7 +377,6 @@ with cB:
     fp_time = st.time_input("Hora Pedida",
                             value=fecha_pedida_actual.time() if pd.notna(fecha_pedida_actual) else datetime.time(0,0),
                             key="fp_time_main")
-
 with cC:
     fl_date = st.date_input("Fecha Llegada (fecha)",
                             value=fecha_llegada_actual.date() if pd.notna(fecha_llegada_actual) else None,
@@ -366,7 +384,6 @@ with cC:
     fl_time = st.time_input("Hora Llegada",
                             value=fecha_llegada_actual.time() if pd.notna(fecha_llegada_actual) else datetime.time(0,0),
                             key="fl_time_main")
-
 with cD:
     st.write("")
     st.write("")
@@ -381,6 +398,7 @@ fecha_llegada_nueva = None
 if fl_date is not None:
     fecha_llegada_nueva = datetime.datetime.combine(fl_date, fl_time)
 
+# Sitio
 st.write("Sitio de Almacenaje")
 opciones_sitio = ["Congelador 1","Congelador 2","Frigorífico","Tª Ambiente"]
 sitio_principal = sitio_almacenaje_actual.split(" - ")[0] if " - " in sitio_almacenaje_actual else sitio_almacenaje_actual
@@ -388,35 +406,34 @@ if sitio_principal not in opciones_sitio:
     sitio_principal = opciones_sitio[0]
 sitio_top = st.selectbox("Tipo Almacenaje", opciones_sitio, index=opciones_sitio.index(sitio_principal))
 
-subopcion = ""
+subopc = ""
 if sitio_top=="Congelador 1":
-    cajones = [f"Cajón {i}" for i in range(1,9)]
-    subopcion = st.selectbox("Cajón (1 Arriba, 8 Abajo)", cajones)
+    caj = [f"Cajón {i}" for i in range(1,9)]
+    subopc = st.selectbox("Cajón (1 Arriba,8 Abajo)", caj)
 elif sitio_top=="Congelador 2":
-    cajones = [f"Cajón {i}" for i in range(1,7)]
-    subopcion = st.selectbox("Cajón (1 Arriba, 6 Abajo)", cajones)
+    caj = [f"Cajón {i}" for i in range(1,7)]
+    subopc = st.selectbox("Cajón (1 Arriba,6 Abajo)", caj)
 elif sitio_top=="Frigorífico":
-    baldas = [f"Balda {i}" for i in range(1,8)] + ["Puerta"]
-    subopcion = st.selectbox("Baldas (1 Arriba, 7 Abajo)", baldas)
+    bal = [f"Balda {i}" for i in range(1,8)] + ["Puerta"]
+    subopc = st.selectbox("Baldas (1 Arriba, 7 Abajo)", bal)
 elif sitio_top=="Tª Ambiente":
-    comentario = st.text_input("Comentario (opcional)")
-    subopcion = comentario.strip()
+    com = st.text_input("Comentario (opcional)")
+    subopc = com.strip()
 
-if subopcion:
-    sitio_almacenaje_nuevo = f"{sitio_top} - {subopcion}"
+if subopc:
+    sitio_almacenaje_nuevo = f"{sitio_top} - {subopc}"
 else:
     sitio_almacenaje_nuevo = sitio_top
 
 if st.button("Guardar Cambios"):
-    # Borrar fecha pedida si tenemos fecha llegada
+    # Si llega => borramos pedida
     if pd.notna(fecha_llegada_nueva):
         fecha_pedida_nueva = pd.NaT
 
-    # Sumar Stock si la fecha de llegada cambió
     if "Stock" in df_main.columns:
         if fecha_llegada_nueva != fecha_llegada_actual and pd.notna(fecha_llegada_nueva):
             df_main.at[row_index,"Stock"] = stock_actual + uds_actual
-            st.info(f"Sumadas {uds_actual} uds al stock. Nuevo stock => {stock_actual+uds_actual}")
+            st.info(f"Sumadas {uds_actual} uds al stock => {stock_actual+uds_actual}")
 
     if "NºLote" in df_main.columns:
         df_main.at[row_index,"NºLote"] = int(lote_nuevo)
@@ -429,19 +446,18 @@ if st.button("Guardar Cambios"):
     if "Sitio almacenaje" in df_main.columns:
         df_main.at[row_index,"Sitio almacenaje"] = sitio_almacenaje_nuevo
 
-    data_dict[sheet_name] = df_main
+    data_dict[sheet_name] = df_main  # sin col internas
 
+    # Guardar a Excel
     new_file = crear_nueva_version_filename()
     with pd.ExcelWriter(new_file, engine="openpyxl") as writer:
-        for sht,df_sheet in data_dict.items():
-            df_sheet.to_excel(writer, sheet_name=sht, index=False)
-
+        for sht, df_sht in data_dict.items():
+            df_sht.to_excel(writer, sheet_name=sht, index=False)
     with pd.ExcelWriter(STOCK_FILE, engine="openpyxl") as writer:
-        for sht,df_sheet in data_dict.items():
-            df_sheet.to_excel(writer, sheet_name=sht, index=False)
+        for sht, df_sht in data_dict.items():
+            df_sht.to_excel(writer, sheet_name=sht, index=False)
 
     st.success(f"✅ Cambios guardados en '{new_file}' y '{STOCK_FILE}'.")
-
     excel_bytes = generar_excel_en_memoria(df_main, sheet_nm=sheet_name)
     st.download_button(
         label="Descargar Excel modificado",
