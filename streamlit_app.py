@@ -81,7 +81,7 @@ def generar_excel_en_memoria(df_act: pd.DataFrame, sheet_nm="Hoja1"):
     return output.getvalue()
 
 # -------------------------------------------------------------------------
-# DICCIONARIO DE LOTES (definición de los títulos de grupo)
+# DICCIONARIO DE LOTES (definición de grupos)
 # -------------------------------------------------------------------------
 LOTS_DATA = {
     "FOCUS": {
@@ -95,9 +95,11 @@ LOTS_DATA = {
         ],
         # 3) Recover All TM Multi-Sample RNA/DNA Isolation workflow-Kit
         "Recover All TM Multi-Sample RNA/DNA Isolation workflow-Kit": [
-            "Kit extracción DNA/RNA", "RecoverAll TM kit (Dnase, protease,…)","H2O RNA free",
+            "Kit extracción DNA/RNA", "RecoverAll TM kit (Dnase, protease,…)", "H2O RNA free",
             "Tubos fondo cónico", "Superscript VILO cDNA Syntheis Kit", "Qubit 1x dsDNA HS Assay kit (100 reactions)"
         ],
+        # 4) (Nuevo) Chip secuenciación liberación de protones 6 millones de lecturas
+        "Chip secuenciación liberación de protones 6 millones de lecturas": []
     },
     "OCA": {
         # 1) Panel OCA Library Assay Chef Ready
@@ -115,7 +117,7 @@ LOTS_DATA = {
         ],
         # 4) Recover All TM Multi-Sample RNA/DNA Isolation workflow-Kit
         "Recover All TM Multi-Sample RNA/DNA Isolation workflow-Kit": [
-            "Kit extracción DNA/RNA", "RecoverAll TM kit (Dnase, protease,…)","H2O RNA free", "Tubos fondo cónico"
+            "Kit extracción DNA/RNA", "RecoverAll TM kit (Dnase, protease,…)", "H2O RNA free", "Tubos fondo cónico"
         ]
     },
     "OCA PLUS": {
@@ -131,44 +133,83 @@ LOTS_DATA = {
         ],
         # 3) Recover All TM Multi-Sample RNA/DNA Isolation workflow-Kit
         "Recover All TM Multi-Sample RNA/DNA Isolation workflow-Kit": [
-            "Kit extracción DNA/RNA", "RecoverAll TM kit (Dnase, protease,…)","H2O RNA free", "Tubos fondo cónico"
+            "Kit extracción DNA/RNA", "RecoverAll TM kit (Dnase, protease,…)", "H2O RNA free", "Tubos fondo cónico"
         ]
     }
 }
 
-# Paleta de colores a usar para agrupar por Ref. Saturno
+# Lista de paneles (para poder filtrar en find_sub_lot)
+panel_order = ["FOCUS", "OCA", "OCA PLUS"]
+
+# Paleta de colores a usar (se usa el ciclo para asignar a cada grupo)
 colors = [
     "#FED7D7", "#FEE2E2", "#FFEDD5", "#FEF9C3", "#D9F99D",
     "#CFFAFE", "#E0E7FF", "#FBCFE8", "#F9A8D4", "#E9D5FF",
     "#FFD700", "#F0FFF0", "#D1FAE5", "#BAFEE2", "#A7F3D0", "#FFEC99"
 ]
 
-# ----------------- NUEVA FUNCIÓN DE AGRUPACIÓN -----------------
-def build_group_info_by_ref(df: pd.DataFrame, panel_default=None):
+# ----------------- Función de búsqueda de grupo -----------------
+def find_sub_lot(nombre_prod: str):
     """
-    Agrupa los registros por 'Ref. Saturno', asignando a cada grupo un color único.
-    Además, marca en la columna 'EsTitulo' aquellas filas cuyo "Nombre producto"
-    coincide (ignorando mayúsculas) con alguno de los títulos definidos en LOTS_DATA para el panel.
+    Devuelve (panel, sublote, esPrincipal) si se encuentra una coincidencia,
+    comparando en minúsculas. Se busca si el nombre coincide exactamente con el
+    título del grupo o con alguno de sus reactivos.
+    """
+    nombre_prod_clean = str(nombre_prod).strip().lower()
+    for p in panel_order:
+        subdict = LOTS_DATA.get(p, {})
+        for sublote_name, reactivos in subdict.items():
+            if nombre_prod_clean == sublote_name.strip().lower():
+                return (p, sublote_name, True)
+            for reactivo in reactivos:
+                if nombre_prod_clean == reactivo.strip().lower():
+                    return (p, sublote_name, False)
+    return None
+
+# ----------------- Función de agrupación y ordenamiento -----------------
+def build_group_info(df: pd.DataFrame, panel_default=None):
+    """
+    Crea las columnas:
+      - GroupTitle: título del grupo según LOTS_DATA (o "Sin Grupo" si no hay match)
+      - EsTitulo: True si el registro coincide con el título (para poner en negrita)
+      - ColorGroup: color asignado a ese grupo
+      - GroupCount: cantidad de registros en ese grupo
+      - MultiSort: 0 si el grupo tiene más de 1 integrante, 1 si es solitario
+      - NotTitulo: 0 para filas título, 1 para el resto (para forzar que el título vaya primero)
     """
     df = df.copy()
-    # Asigna color a cada valor único de "Ref. Saturno"
-    unique_refs = sorted(df["Ref. Saturno"].unique())
-    ref_color_mapping = {}
+    df["GroupTitle"] = None
+    df["EsTitulo"] = False
+    for i, row in df.iterrows():
+        nombre = str(row.get("Nombre producto", "")).strip()
+        info = find_sub_lot(nombre)
+        # Si se encontró y coincide con el panel (o se ignora panel_default si es None)
+        if info is not None and (panel_default is None or info[0] == panel_default):
+            panel, group_title, is_main = info
+            df.at[i, "GroupTitle"] = group_title
+            df.at[i, "EsTitulo"] = is_main
+        else:
+            df.at[i, "GroupTitle"] = "Sin Grupo"
+            df.at[i, "EsTitulo"] = False
+
+    # Asignar un color único a cada grupo
+    unique_groups = sorted(df["GroupTitle"].unique())
+    group_color_mapping = {}
     color_cycle_local = itertools.cycle(colors)
-    for ref in unique_refs:
-        ref_color_mapping[ref] = next(color_cycle_local)
-    df["ColorGroup"] = df["Ref. Saturno"].apply(lambda ref: ref_color_mapping.get(ref, "#FFFFFF"))
-    
-    # Determina cuáles filas son títulos de grupo según LOTS_DATA para el panel actual
-    group_titles = []
-    if panel_default in LOTS_DATA:
-        group_titles = [ title.lower().strip() for title in LOTS_DATA[panel_default].keys() ]
-    df["EsTitulo"] = df["Nombre producto"].apply(lambda x: str(x).lower().strip() in group_titles)
+    for group in unique_groups:
+        group_color_mapping[group] = next(color_cycle_local)
+    df["ColorGroup"] = df["GroupTitle"].apply(lambda x: group_color_mapping.get(x, "#FFFFFF"))
+
+    # Contar integrantes por grupo
+    group_sizes = df.groupby("GroupTitle").size().to_dict()
+    df["GroupCount"] = df["GroupTitle"].apply(lambda x: group_sizes.get(x, 0))
+    # MultiSort: 0 para grupos con más de 1 integrante, 1 para solitarios
+    df["MultiSort"] = df["GroupCount"].apply(lambda x: 0 if x > 1 else 1)
+    # NotTitulo: 0 para fila título (para que aparezca primero), 1 para el resto
+    df["NotTitulo"] = df["EsTitulo"].apply(lambda x: 0 if x else 1)
     return df
 
-# -------------------------------------------------------------------------
-# FUNCIONES DE ALARMA Y ESTILO
-# -------------------------------------------------------------------------
+# ----------------- Función de estilo para la tabla -----------------
 def calc_alarma(row):
     """Col 'Alarma': '🔴' si Stock=0 y Fecha Pedida es nula, '🟨' si Stock=0 y Fecha Pedida no es nula."""
     s = row.get("Stock", 0)
@@ -180,7 +221,7 @@ def calc_alarma(row):
     return ""
 
 def style_lote(row):
-    """Colorea la fila según 'ColorGroup'; si EsTitulo es True, pone en negrita el 'Nombre producto'."""
+    """Colorea la fila según 'ColorGroup'; si EsTitulo es True se pone en negrita 'Nombre producto'."""
     bg = row.get("ColorGroup", "")
     es_titulo = row.get("EsTitulo", False)
     styles = [f"background-color:{bg}"] * len(row)
@@ -300,7 +341,7 @@ with st.sidebar:
 # -------------------------------------------------------------------------
 # CUERPO PRINCIPAL
 # -------------------------------------------------------------------------
-st.title("📦 Control de Stock: Agrupación por Ref. Saturno y Títulos en Negrita")
+st.title("📦 Control de Stock: Agrupación por Grupos (Título en Negrita y Orden Personalizado)")
 
 if not data_dict:
     st.error("No se pudo cargar la base de datos.")
@@ -314,31 +355,32 @@ sheet_name = st.selectbox("Selecciona la hoja a editar:", hojas_principales, key
 df_main_original = data_dict[sheet_name].copy()
 df_main_original = enforce_types(df_main_original)
 
-# 1) Crear df para estilo y agrupar por Ref. Saturno
+# 1) Creamos df para estilo: calculamos alarma y agrupamos según LOTS_DATA para el panel actual.
 df_for_style = df_main_original.copy()
 df_for_style["Alarma"] = df_for_style.apply(calc_alarma, axis=1)
-df_for_style = build_group_info_by_ref(df_for_style, panel_default=sheet_name)
-# Ordena por Ref. Saturno para agrupar registros iguales
-df_for_style.sort_values(by=["Ref. Saturno"], inplace=True)
+df_for_style = build_group_info(df_for_style, panel_default=sheet_name)
+
+# 2) Ordenamos: primero los grupos con más de 1 integrante y dentro de ellos el título (EsTitulo=True) al principio; después los solitarios.
+df_for_style.sort_values(by=["MultiSort", "GroupTitle", "NotTitulo"], inplace=True)
 df_for_style.reset_index(drop=True, inplace=True)
 
 styled_df = df_for_style.style.apply(style_lote, axis=1)
 
-# Definir columnas a ocultar (columnas internas)
+# Columnas internas a ocultar
 all_cols = df_for_style.columns.tolist()
-cols_to_hide = ["ColorGroup", "EsTitulo"]
+cols_to_hide = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupTitle"]
 final_cols = [c for c in all_cols if c not in cols_to_hide]
 
 table_html = styled_df.to_html(columns=final_cols)
 
-# 2) df_main final => sin columnas internas
+# 3) df_main final sin columnas internas
 df_main = df_for_style.copy()
 df_main.drop(columns=cols_to_hide, inplace=True, errors="ignore")
 
 st.write("#### Vista de la Hoja (con columna 'Alarma' y sin columnas internas)")
 st.write(table_html, unsafe_allow_html=True)
 
-# 3) Seleccionar Reactivo a Modificar
+# 4) Seleccionar Reactivo a Modificar
 if "Nombre producto" in df_main.columns and "Ref. Fisher" in df_main.columns:
     display_series = df_main.apply(lambda r: f"{r['Nombre producto']} ({r['Ref. Fisher']})", axis=1)
 else:
@@ -465,18 +507,14 @@ if st.button("Guardar Cambios"):
     with pd.ExcelWriter(new_file, engine="openpyxl") as writer:
         for sht, df_sht in data_dict.items():
             # Eliminamos columnas internas si existen
-            if all(c in df_sht.columns for c in ["ColorGroup", "EsTitulo"]):
-                temp = df_sht.drop(columns=["ColorGroup", "EsTitulo"], errors="ignore")
-            else:
-                temp = df_sht
+            cols_internos = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupTitle"]
+            temp = df_sht.drop(columns=cols_internos, errors="ignore")
             temp.to_excel(writer, sheet_name=sht, index=False)
 
     with pd.ExcelWriter(STOCK_FILE, engine="openpyxl") as writer:
         for sht, df_sht in data_dict.items():
-            if all(c in df_sht.columns for c in ["ColorGroup", "EsTitulo"]):
-                temp = df_sht.drop(columns=["ColorGroup", "EsTitulo"], errors="ignore")
-            else:
-                temp = df_sht
+            cols_internos = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupTitle"]
+            temp = df_sht.drop(columns=cols_internos, errors="ignore")
             temp.to_excel(writer, sheet_name=sht, index=False)
 
     st.success(f"✅ Cambios guardados en '{new_file}' y '{STOCK_FILE}'.")
