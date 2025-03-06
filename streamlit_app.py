@@ -127,7 +127,6 @@ LOTS_DATA = {
 panel_order = ["FOCUS","OCA","OCA PLUS"]
 panel_index = {p:i for i,p in enumerate(panel_order)}
 
-# Colores para sub-lotes
 colors = [
     "#FED7D7","#FEE2E2","#FFEDD5","#FEF9C3","#D9F99D",
     "#CFFAFE","#E0E7FF","#FBCFE8","#F9A8D4","#E9D5FF",
@@ -135,7 +134,6 @@ colors = [
 ]
 color_cycle = itertools.cycle(colors)
 
-# (panel, sublote) -> (panelIdx, subloteIdx, color)
 sub_lot_metadata = {}
 for p in panel_order:
     subdict = LOTS_DATA.get(p,{})
@@ -268,7 +266,7 @@ with st.sidebar:
                     else:
                         st.error("❌ No se encontró la copia original en 'versions/Stock_Original.xlsx'.")
         else:
-            st.error("No hay data_dict. Verifica Stock_Original.xlsx.")
+            st.error("No hay data_dict. Revisa Stock_Original.xlsx.")
             st.stop()
 
     with st.expander("⚠️ Alarmas", expanded=False):
@@ -299,7 +297,7 @@ with st.sidebar:
                 df_agotado.at[idx_c,"Stock"] = nuevo_stock
                 st.warning(f"Consumidas {uds_consumidas} uds. Stock final => {nuevo_stock}")
                 data_dict[hoja_sel_consumo] = df_agotado
-                st.success("No se genera versión, queda en memoria.")
+                st.success("No se genera versión, cambios solo en memoria.")
         else:
             st.error("No hay data_dict. Revisa Stock_Original.xlsx.")
             st.stop()
@@ -319,36 +317,32 @@ sheet_name = st.selectbox("Selecciona la hoja a editar:", hojas_principales, key
 df_main_original = data_dict[sheet_name].copy()
 df_main_original = enforce_types(df_main_original)
 
-# ---- A) Creamos df_for_style con col extra y ordenado
+# ---- A) df_for_style con col extra y ordenado
 df_for_style = df_main_original.copy()
-# Columna Alarma
 df_for_style["Alarma"] = df_for_style.apply(calc_alarma, axis=1)
-# Info de Lotes
 df_for_style = build_lote_info(df_for_style)
-# Ordenamos
 df_for_style.sort_values(by=["PanelIdx","SubLoteIdx","EsPrincipal"], ascending=[True,True,False], inplace=True)
 df_for_style.reset_index(drop=True, inplace=True)
 
-# Generamos styler
 styled_df = df_for_style.style.apply(style_lote, axis=1)
 
-# B) Obtenemos HTML de la tabla sin mostrar las 4 col internas
+# B) Ocultamos las col 'PanelIdx','SubLoteIdx','EsPrincipal','Color' en la vista
 all_cols = df_for_style.columns.tolist()
 cols_to_hide = ["PanelIdx","SubLoteIdx","EsPrincipal","Color"]
 final_cols = [c for c in all_cols if c not in cols_to_hide]
 table_html = styled_df.to_html(columns=final_cols)
 
-# C) Reemplazamos df_main por la versión final (sin col internas)
+# C) df_main final (el DataFrame real sin col internas)
 df_main = df_for_style.copy()
 df_main.drop(columns=cols_to_hide, inplace=True, errors="ignore")
 
 # D) Mostramos la tabla
-st.write("#### Vista de la Hoja (col 'Alarma', sub-lotes, sin columnas internas ni 'Restantes')")
+st.write("#### Vista de la Hoja (col 'Alarma', sin 'Restantes', ni columnas internas)")
 st.write(table_html, unsafe_allow_html=True)
 
-# E) Seleccionar reactivo a modificar
+# E) Seleccionar Reactivo a Modificar
 if "Nombre producto" in df_main.columns and "Ref. Fisher" in df_main.columns:
-    display_series = df_main.apply(lambda row: f"{row['Nombre producto']} ({row['Ref. Fisher']})", axis=1)
+    display_series = df_main.apply(lambda r: f"{r['Nombre producto']} ({r['Ref. Fisher']})", axis=1)
 else:
     display_series = df_main.iloc[:,0].astype(str)
 
@@ -390,15 +384,17 @@ with cD:
     if st.button("Refrescar Página"):
         st.rerun()
 
+# Convertir a Timestamp para evitar FutureWarning
 fecha_pedida_nueva = None
 if fp_date is not None:
-    fecha_pedida_nueva = datetime.datetime.combine(fp_date, fp_time)
+    dt_ped = datetime.datetime.combine(fp_date, fp_time)
+    fecha_pedida_nueva = pd.to_datetime(dt_ped)  # casting
 
 fecha_llegada_nueva = None
 if fl_date is not None:
-    fecha_llegada_nueva = datetime.datetime.combine(fl_date, fl_time)
+    dt_lleg = datetime.datetime.combine(fl_date, fl_time)
+    fecha_llegada_nueva = pd.to_datetime(dt_lleg)
 
-# Sitio
 st.write("Sitio de Almacenaje")
 opciones_sitio = ["Congelador 1","Congelador 2","Frigorífico","Tª Ambiente"]
 sitio_principal = sitio_almacenaje_actual.split(" - ")[0] if " - " in sitio_almacenaje_actual else sitio_almacenaje_actual
@@ -426,38 +422,65 @@ else:
     sitio_almacenaje_nuevo = sitio_top
 
 if st.button("Guardar Cambios"):
-    # Si llega => borramos pedida
+    # Si se introduce fecha llegada => borrar pedida
     if pd.notna(fecha_llegada_nueva):
         fecha_pedida_nueva = pd.NaT
 
+    # Sumar stock si llega
     if "Stock" in df_main.columns:
         if fecha_llegada_nueva != fecha_llegada_actual and pd.notna(fecha_llegada_nueva):
             df_main.at[row_index,"Stock"] = stock_actual + uds_actual
             st.info(f"Sumadas {uds_actual} uds al stock => {stock_actual+uds_actual}")
 
+    # Asignar con casting para evitar FutureWarning
     if "NºLote" in df_main.columns:
         df_main.at[row_index,"NºLote"] = int(lote_nuevo)
+
     if "Caducidad" in df_main.columns:
-        df_main.at[row_index,"Caducidad"] = caducidad_nueva
+        if pd.notna(caducidad_nueva):
+            df_main.at[row_index,"Caducidad"] = pd.to_datetime(caducidad_nueva)
+        else:
+            df_main.at[row_index,"Caducidad"] = pd.NaT
+
     if "Fecha Pedida" in df_main.columns:
-        df_main.at[row_index,"Fecha Pedida"] = fecha_pedida_nueva
+        if pd.notna(fecha_pedida_nueva):
+            df_main.at[row_index,"Fecha Pedida"] = pd.to_datetime(fecha_pedida_nueva)
+        else:
+            df_main.at[row_index,"Fecha Pedida"] = pd.NaT
+
     if "Fecha Llegada" in df_main.columns:
-        df_main.at[row_index,"Fecha Llegada"] = fecha_llegada_nueva
+        if pd.notna(fecha_llegada_nueva):
+            df_main.at[row_index,"Fecha Llegada"] = pd.to_datetime(fecha_llegada_nueva)
+        else:
+            df_main.at[row_index,"Fecha Llegada"] = pd.NaT
+
     if "Sitio almacenaje" in df_main.columns:
         df_main.at[row_index,"Sitio almacenaje"] = sitio_almacenaje_nuevo
 
-    data_dict[sheet_name] = df_main  # sin col internas
+    data_dict[sheet_name] = df_main
 
-    # Guardar a Excel
     new_file = crear_nueva_version_filename()
+    # Guardamos cada hoja en new_file sin col internas
     with pd.ExcelWriter(new_file, engine="openpyxl") as writer:
         for sht, df_sht in data_dict.items():
-            df_sht.to_excel(writer, sheet_name=sht, index=False)
+            # Repetimos la operación para cada sheet
+            # Por si se hubieran creado col internas en otros sitios
+            if all(col in df_sht.columns for col in ["PanelIdx","SubLoteIdx","EsPrincipal","Color"]):
+                dtemp = df_sht.drop(columns=["PanelIdx","SubLoteIdx","EsPrincipal","Color"], errors="ignore")
+            else:
+                dtemp = df_sht
+            dtemp.to_excel(writer, sheet_name=sht, index=False)
+
     with pd.ExcelWriter(STOCK_FILE, engine="openpyxl") as writer:
         for sht, df_sht in data_dict.items():
-            df_sht.to_excel(writer, sheet_name=sht, index=False)
+            if all(col in df_sht.columns for col in ["PanelIdx","SubLoteIdx","EsPrincipal","Color"]):
+                dtemp = df_sht.drop(columns=["PanelIdx","SubLoteIdx","EsPrincipal","Color"], errors="ignore")
+            else:
+                dtemp = df_sht
+            dtemp.to_excel(writer, sheet_name=sht, index=False)
 
     st.success(f"✅ Cambios guardados en '{new_file}' y '{STOCK_FILE}'.")
+
     excel_bytes = generar_excel_en_memoria(df_main, sheet_nm=sheet_name)
     st.download_button(
         label="Descargar Excel modificado",
