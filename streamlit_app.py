@@ -83,7 +83,7 @@ def generar_excel_en_memoria(df_act: pd.DataFrame, sheet_nm="Hoja1"):
 # -------------------------------------------------------------------------
 # DICCIONARIO DE LOTES (definición de grupos)
 # -------------------------------------------------------------------------
-# Los títulos (claves) siguen siendo definidos para cada panel
+# Los títulos (claves) siguen siendo definidos para cada panel.
 LOTS_DATA = {
     "FOCUS": {
         "Panel Oncomine Focus Library Assay Chef Ready": [
@@ -128,6 +128,7 @@ LOTS_DATA = {
     }
 }
 
+# Para agrupar por reactivo, usaremos la "Ref. Saturno"
 # Lista de paneles (para filtrar)
 panel_order = ["FOCUS", "OCA", "OCA PLUS"]
 
@@ -138,27 +139,26 @@ colors = [
     "#FFD700", "#F0FFF0", "#D1FAE5", "#BAFEE2", "#A7F3D0", "#FFEC99"
 ]
 
-# ----------------- NUEVA FUNCIÓN: Agrupar por Ref. Saturno -----------------
+# ----------------- Agrupar por Ref. Saturno -----------------
 def build_group_info_by_ref(df: pd.DataFrame, panel_default=None):
     """
-    Agrupa los registros por el valor de "Ref. Saturno".
-    Para cada grupo:
-      - Se asigna la misma "GroupID" (igual a "Ref. Saturno").
-      - Se calcula el tamaño del grupo (GroupCount).
-      - Se asigna un color único.
-      - Se determina la fila título (EsTitulo): si alguno de los reactivos
-        coincide (sin distinguir mayúsculas) con algún título definido en LOTS_DATA
-        para el panel actual, se marca; si no, se marca la primera fila del grupo.
-      - Se definen MultiSort (0 para grupos con >1 integrante, 1 para solitarios)
-        y NotTitulo (0 para la fila título, 1 para el resto).
+    Agrupa los registros según el valor de "Ref. Saturno".
+    Asigna:
+      - GroupID igual a "Ref. Saturno".
+      - GroupCount: tamaño del grupo.
+      - ColorGroup: color asignado a ese grupo.
+      - EsTitulo: determina la fila título.
+        Se intenta marcar como título la fila cuyo "Nombre producto" coincida con
+        alguno de los títulos definidos en LOTS_DATA para el panel actual.
+        Si no se encuentra, se marca la primera fila del grupo.
+      - MultiSort: 0 para grupos con >1 integrante, 1 para solitarios.
+      - NotTitulo: 0 para la fila título, 1 para el resto.
     """
     df = df.copy()
-    # Grupo según "Ref. Saturno"
     df["GroupID"] = df["Ref. Saturno"]
     group_sizes = df.groupby("GroupID").size().to_dict()
     df["GroupCount"] = df["GroupID"].apply(lambda x: group_sizes.get(x, 0))
     
-    # Asignar color: cada valor único de GroupID tendrá un color
     unique_ids = sorted(df["GroupID"].unique())
     group_color_mapping = {}
     color_cycle_local = itertools.cycle(colors)
@@ -166,9 +166,9 @@ def build_group_info_by_ref(df: pd.DataFrame, panel_default=None):
         group_color_mapping[gid] = next(color_cycle_local)
     df["ColorGroup"] = df["GroupID"].apply(lambda x: group_color_mapping.get(x, "#FFFFFF"))
     
-    # Determinar EsTitulo: si en el grupo hay algún reactivo cuyo "Nombre producto" coincida
-    # con alguno de los títulos definidos en LOTS_DATA para panel_default, se marca; de lo contrario,
-    # se marca la primera fila del grupo.
+    # Determinar EsTitulo: si dentro del grupo hay algún "Nombre producto" que coincida
+    # con alguno de los títulos definidos en LOTS_DATA para el panel actual, se marca.
+    # Sino, se marca la primera fila del grupo.
     group_titles = []
     if panel_default in LOTS_DATA:
         group_titles = [t.strip().lower() for t in LOTS_DATA[panel_default].keys()]
@@ -198,7 +198,7 @@ def calc_alarma(row):
     return ""
 
 def style_lote(row):
-    """Colorea la fila según 'ColorGroup'; si EsTitulo es True se pone en negrita 'Nombre producto'."""
+    """Colorea la fila según 'ColorGroup'; si EsTitulo es True, pone en negrita 'Nombre producto'."""
     bg = row.get("ColorGroup", "")
     es_titulo = row.get("EsTitulo", False)
     styles = [f"background-color:{bg}"] * len(row)
@@ -206,6 +206,17 @@ def style_lote(row):
         idx = row.index.get_loc("Nombre producto")
         styles[idx] += "; font-weight:bold"
     return styles
+
+# -------------------------------------------------------------------------
+# Inyectar algo de CSS para agrandar el multiselect (visualización de reactivos a pedir)
+st.markdown("""
+    <style>
+    .big-select select {
+        font-size: 18px;
+        height: auto;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
 # -------------------------------------------------------------------------
 # BARRA LATERAL
@@ -435,7 +446,7 @@ if subopcion:
 else:
     sitio_almacenaje_nuevo = sitio_top
 
-# NUEVA SECCIÓN: Si se ingresó Fecha Pedida, preguntar por el pedido del grupo completo
+# NUEVA SECCIÓN: Si se ingresó Fecha Pedida, preguntar por el pedido del grupo completo.
 group_order_selected = None
 if pd.notna(fecha_pedida_nueva):
     # Recalcular agrupación completa de la hoja (por Ref. Saturno)
@@ -443,13 +454,16 @@ if pd.notna(fecha_pedida_nueva):
     group_id = df_for_style.at[row_index, "GroupID"]
     group_reactivos = df_grouped[df_grouped["GroupID"] == group_id]
     if not group_reactivos.empty:
-        # Usar el nombre del título (fila con EsTitulo=True) si existe; sino, usar "Ref. Saturno: <group_id>"
+        # Usar el nombre del título (fila con EsTitulo==True) si existe; sino, usar "Ref. Saturno: <group_id>"
         if group_reactivos["EsTitulo"].any():
             lot_name = group_reactivos[group_reactivos["EsTitulo"]==True]["Nombre producto"].iloc[0]
         else:
             lot_name = f"Ref. Saturno {group_id}"
         options = group_reactivos.apply(lambda r: f"{r['Nombre producto']} ({r['Ref. Fisher']})", axis=1).tolist()
+        # Envolver el multiselect en un div para aplicar el CSS de "big-select"
+        st.markdown('<div class="big-select">', unsafe_allow_html=True)
         group_order_selected = st.multiselect(f"¿Quieres pedir también los siguientes reactivos del lote **{lot_name}**?", options, default=options)
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # -------------------------------------------------------------------------
 # Botón para Guardar Cambios (incluye actualización de Fecha Pedida para el grupo)
@@ -484,8 +498,8 @@ if st.button("Guardar Cambios"):
     if "Sitio almacenaje" in df_main.columns:
         df_main.at[row_index, "Sitio almacenaje"] = sitio_almacenaje_nuevo
 
-    # Actualización en grupo: si se ingresó Fecha Pedida y se seleccionaron reactivos del mismo grupo,
-    # se asigna la misma Fecha Pedida a esos registros.
+    # Actualización en grupo:
+    # Si se ingresó Fecha Pedida y se seleccionaron reactivos del mismo grupo, se asigna la misma Fecha Pedida.
     if pd.notna(fecha_pedida_nueva) and group_order_selected:
         df_sheet = data_dict[sheet_name]
         for idx, row in df_sheet.iterrows():
@@ -495,7 +509,7 @@ if st.button("Guardar Cambios"):
 
     data_dict[sheet_name] = df_main
 
-    # Guardar cambios: se genera una nueva versión y se actualiza el archivo principal
+    # Guardar cambios: generar nueva versión y actualizar el archivo principal
     new_file = crear_nueva_version_filename()
     with pd.ExcelWriter(new_file, engine="openpyxl") as writer:
         for sht, df_sht in data_dict.items():
