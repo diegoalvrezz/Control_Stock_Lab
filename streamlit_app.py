@@ -105,6 +105,11 @@ def group_rows_by_ref(df: pd.DataFrame):
         else:
             df.at[i, "EsPrincipal"] = False
     # Asignar color a cada grupo
+    color_list = [
+    "#FED7D7","#FEE2E2","#FFEDD5","#FEF9C3","#D9F99D",
+    "#CFFAFE","#E0E7FF","#FBCFE8","#F9A8D4","#E9D5FF",
+    "#FFD700","#F0FFF0","#D1FAE5","#BAFEE2","#A7F3D0","#FFEC99"
+]
     unique_groups = sorted(df["GroupTitle"].unique())
     color_cycle = itertools.cycle(color_list)
     color_map = {grp: next(color_cycle) for grp in unique_groups}
