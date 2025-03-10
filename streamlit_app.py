@@ -212,7 +212,7 @@ st.markdown("""
 # BARRA LATERAL
 # -------------------------------------------------------------------------
 with st.sidebar:
-    # Botón para "Limpiar Base de Datos" – se restablece copiando la versión original
+    # Botón para Limpiar Base de Datos: copia el archivo original sobre el principal
     if st.button("Limpiar Base de Datos"):
         original_path = os.path.join(VERSIONS_DIR, "Stock_Original.xlsx")
         if os.path.exists(original_path):
@@ -251,10 +251,54 @@ with st.sidebar:
                 st.success("No se crea versión, cambios solo en memoria.")
 
 # -------------------------------------------------------------------------
-# CUERPO PRINCIPAL
+# SECCIÓN: Recepción de lote completo
 # -------------------------------------------------------------------------
-st.title("📦 Control de Stock: Agrupación por Ref. Saturno y Pedido del Lote Completo")
+with st.expander("Recepción de lote completo", expanded=False):
+    st.subheader("Confirmar recepción de lote")
+    # Suponemos que la hoja actual (sheet_name) corresponde al panel actual
+    if sheet_name in LOTS_DATA:
+        lot_titles = list(LOTS_DATA[sheet_name].keys())
+    else:
+        lot_titles = []
+    selected_lot = st.selectbox("Seleccione el título del lote", lot_titles)
+    if selected_lot:
+        # Buscar en la hoja actual la fila cuyo "Nombre producto" coincida con el título (sin distinguir mayúsculas)
+        df_current = enforce_types(data_dict[sheet_name])
+        row_lot = df_current[df_current["Nombre producto"].str.lower() == selected_lot.lower()]
+        if not row_lot.empty:
+            lot_ref = row_lot.iloc[0]["Ref. Saturno"]
+            # Filtrar los reactivos con la misma Ref. Saturno
+            df_lote = df_current[df_current["Ref. Saturno"] == lot_ref].copy()
+            st.write("Edite la información común del lote:")
+            # Usamos st.experimental_data_editor para permitir edición directa
+            # Mostramos las columnas editables: Nº de Lote, Fecha Llegada, Caducidad, Sitio almacenaje
+            cols_edit = ["NºLote", "Fecha Llegada", "Caducidad", "Sitio almacenaje"]
+            df_edit = st.experimental_data_editor(df_lote[cols_edit], num_rows="dynamic", key="edicion_lote")
+            if st.button("Guardar Recepción del Lote"):
+                # Actualizar cada fila del lote en data_dict con los valores editados
+                for idx in df_lote.index:
+                    for col in cols_edit:
+                        data_dict[sheet_name].at[idx, col] = df_edit.at[idx, col]
+                new_file = crear_nueva_version_filename()
+                with pd.ExcelWriter(new_file, engine="openpyxl") as writer:
+                    for sht, df_sht in data_dict.items():
+                        cols_internos = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID"]
+                        temp = df_sht.drop(columns=cols_internos, errors="ignore")
+                        temp.to_excel(writer, sheet_name=sht, index=False)
+                with pd.ExcelWriter(STOCK_FILE, engine="openpyxl") as writer:
+                    for sht, df_sht in data_dict.items():
+                        cols_internos = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID"]
+                        temp = df_sht.drop(columns=cols_internos, errors="ignore")
+                        temp.to_excel(writer, sheet_name=sht, index=False)
+                st.success("Recepción del lote actualizada correctamente.")
+                st.experimental_rerun()
+        else:
+            st.warning("No se encontró un lote con ese título en la hoja actual.")
 
+# -------------------------------------------------------------------------
+# SECCIÓN: Edición individual y guardado
+# -------------------------------------------------------------------------
+st.title("Control de Stock: Agrupación por Ref. Saturno y Edición Individual")
 if not data_dict:
     st.error("No se pudo cargar la base de datos.")
     st.stop()
@@ -267,17 +311,17 @@ sheet_name = st.selectbox("Selecciona la hoja a editar:", hojas_principales, key
 df_main_original = data_dict[sheet_name].copy()
 df_main_original = enforce_types(df_main_original)
 
-# 1) Creamos df para estilo: calculamos alarma y agrupamos por Ref. Saturno
+# 1) Crear df para estilo: calculamos alarma y agrupamos por Ref. Saturno
 df_for_style = df_main_original.copy()
 df_for_style["Alarma"] = df_for_style.apply(calc_alarma, axis=1)
 df_for_style = build_group_info_by_ref(df_for_style, panel_default=sheet_name)
 
-# 2) Ordenamos: primero los grupos con >1 integrante y dentro de ellos la fila título al inicio; luego los solitarios.
+# 2) Ordenar: primero grupos con >1 integrante y dentro de ellos la fila título al inicio; luego solitarios.
 df_for_style.sort_values(by=["MultiSort", "GroupID", "NotTitulo"], inplace=True)
 df_for_style.reset_index(drop=True, inplace=True)
 styled_df = df_for_style.style.apply(style_lote, axis=1)
 
-# Columnas internas a ocultar
+# Ocultar columnas internas
 all_cols = df_for_style.columns.tolist()
 cols_to_hide = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID"]
 final_cols = [c for c in all_cols if c not in cols_to_hide]
@@ -289,7 +333,7 @@ df_main.drop(columns=cols_to_hide, inplace=True, errors="ignore")
 st.write("#### Vista de la Hoja (con columna 'Alarma' y sin columnas internas)")
 st.write(table_html, unsafe_allow_html=True)
 
-# 4) Seleccionar Reactivo a Modificar
+# 4) Seleccionar reactivo a modificar
 if "Nombre producto" in df_main.columns and "Ref. Fisher" in df_main.columns:
     display_series = df_main.apply(lambda r: f"{r['Nombre producto']} ({r['Ref. Fisher']})", axis=1)
 else:
@@ -366,7 +410,7 @@ if subopcion:
 else:
     sitio_almacenaje_nuevo = sitio_top
 
-# NUEVA SECCIÓN 1: Si se ingresó Fecha Pedida, preguntar por el pedido del grupo completo.
+# NUEVA SECCIÓN: Si se ingresó Fecha Pedida, preguntar por el pedido del grupo completo.
 group_order_selected = None
 if pd.notna(fecha_pedida_nueva):
     group_id = df_for_style.at[row_index, "GroupID"]
@@ -382,35 +426,14 @@ if pd.notna(fecha_pedida_nueva):
         group_order_selected = st.multiselect(f"¿Quieres pedir también los siguientes reactivos del lote **{lot_name}**?", options, default=options)
         st.markdown('</div>', unsafe_allow_html=True)
 
-# NUEVA SECCIÓN 2: Confirmar recepción del lote
-group_arrival_selected = None
-confirmar_llegada = st.checkbox("Confirmar recepción lote")
-if confirmar_llegada and pd.notna(fecha_llegada_nueva):
-    group_id = df_for_style.at[row_index, "GroupID"]
-    group_reactivos = df_for_style[df_for_style["GroupID"] == group_id]
-    if not group_reactivos.empty:
-        if group_reactivos["EsTitulo"].any():
-            lot_name_arrival = group_reactivos[group_reactivos["EsTitulo"]==True]["Nombre producto"].iloc[0]
-        else:
-            lot_name_arrival = f"Ref. Saturno {group_id}"
-        group_reactivos_reset = group_reactivos.reset_index()
-        options_arrival = group_reactivos_reset.apply(lambda r: f"{r['index']} - {r['Nombre producto']} ({r['Ref. Fisher']})", axis=1).tolist()
-        st.markdown('<div class="big-select">', unsafe_allow_html=True)
-        group_arrival_selected = st.multiselect(f"¿Confirmar recepción para los siguientes reactivos del lote **{lot_name_arrival}**?", options_arrival, default=options_arrival)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-# -------------------------------------------------------------------------
-# Botón para Guardar Cambios (incluye actualización en grupo)
-# -------------------------------------------------------------------------
+# Botón para Guardar Cambios (actualiza datos individuales y del grupo)
 if st.button("Guardar Cambios"):
     if pd.notna(fecha_llegada_nueva):
         fecha_pedida_nueva = pd.NaT
-
     if "Stock" in df_main.columns:
         if fecha_llegada_nueva != fecha_llegada_actual and pd.notna(fecha_llegada_nueva):
             df_main.at[row_index, "Stock"] = stock_actual + uds_actual
             st.info(f"Sumadas {uds_actual} uds al stock => {stock_actual + uds_actual}")
-
     if "NºLote" in df_main.columns:
         df_main.at[row_index, "NºLote"] = int(lote_nuevo)
     if "Caducidad" in df_main.columns:
@@ -431,7 +454,7 @@ if st.button("Guardar Cambios"):
     if "Sitio almacenaje" in df_main.columns:
         df_main.at[row_index, "Sitio almacenaje"] = sitio_almacenaje_nuevo
 
-    # Actualización en grupo para Fecha Pedida:
+    # Actualización en grupo: para cada opción seleccionada en el multiselect, asignar la Fecha Pedida
     if pd.notna(fecha_pedida_nueva) and group_order_selected:
         for label in group_order_selected:
             try:
@@ -440,17 +463,7 @@ if st.button("Guardar Cambios"):
             except Exception as e:
                 st.error(f"Error actualizando índice {label} (Fecha Pedida): {e}")
 
-    # Actualización en grupo para Fecha Llegada (confirmar recepción):
-    if pd.notna(fecha_llegada_nueva) and group_arrival_selected:
-        for label in group_arrival_selected:
-            try:
-                i_val = int(label.split(" - ")[0])
-                df_main.at[i_val, "Fecha Llegada"] = fecha_llegada_nueva
-            except Exception as e:
-                st.error(f"Error actualizando índice {label} (Fecha Llegada): {e}")
-
     data_dict[sheet_name] = df_main
-
     new_file = crear_nueva_version_filename()
     with pd.ExcelWriter(new_file, engine="openpyxl") as writer:
         for sht, df_sht in data_dict.items():
@@ -462,7 +475,6 @@ if st.button("Guardar Cambios"):
             cols_internos = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID"]
             temp = df_sht.drop(columns=cols_internos, errors="ignore")
             temp.to_excel(writer, sheet_name=sht, index=False)
-
     st.success(f"✅ Cambios guardados en '{new_file}' y '{STOCK_FILE}'.")
     excel_bytes = generar_excel_en_memoria(df_main, sheet_nm=sheet_name)
     st.download_button(
