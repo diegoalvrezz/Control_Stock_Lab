@@ -80,138 +80,140 @@ def generar_excel_en_memoria(df_act: pd.DataFrame, sheet_nm="Hoja1"):
     output.seek(0)
     return output.getvalue()
 
-# -------------------------------------------------------------------------
-# DICCIONARIO DE LOTES (definición de grupos)
-# -------------------------------------------------------------------------
+# ---------------------- DICCIONARIO DE LOTES ----------------------
 LOTS_DATA = {
     "FOCUS": {
-        # 1) Panel Oncomine Focus Library Assay Chef Ready
         "Panel Oncomine Focus Library Assay Chef Ready": [
-            "Primers DNA", "Primers RNA", "Reagents DL8", "Chef supplies (plásticos)", "Placas", "Solutions DL8"
+            "Primers DNA","Primers RNA","Reagents DL8","Chef supplies (plásticos)","Placas","Solutions DL8"
         ],
-        # 2) Ion 510/520/530 kit-Chef (TEMPLADO)
         "Ion 510/520/530 kit-Chef (TEMPLADO)": [
-            "Chef Reagents", "Chef Solutions", "Chef supplies (plásticos)", "Solutions Reagent S5", "Botellas S5"
+            "Chef Reagents","Chef Solutions","Chef supplies (plásticos)","Solutions Reagent S5","Botellas S5"
         ],
-        # 3) Recover All TM Multi-Sample RNA/DNA Isolation workflow-Kit
         "Recover All TM Multi-Sample RNA/DNA Isolation workflow-Kit": [
-            "Kit extracción DNA/RNA", "RecoverAll TM kit (Dnase, protease,…)", "H2O RNA free",
-            "Tubos fondo cónico", "Superscript VILO cDNA Syntheis Kit", "Qubit 1x dsDNA HS Assay kit (100 reactions)"
+            "Kit extracción DNA/RNA","RecoverAll TM kit (Dnase, protease,…)","H2O RNA free",
+            "Tubos fondo cónico","Superscript VILO cDNA Syntheis Kit","Qubit 1x dsDNA HS Assay kit (100 reactions)"
         ],
-        # 4) (Nuevo) Chip secuenciación liberación de protones 6 millones de lecturas
         "Chip secuenciación liberación de protones 6 millones de lecturas": []
     },
     "OCA": {
-        # 1) Panel OCA Library Assay Chef Ready
         "Panel OCA Library Assay Chef Ready": [
-            "Primers DNA", "Primers RNA", "Reagents DL8", "Chef supplies (plásticos)", "Placas", "Solutions DL8"
+            "Primers DNA","Primers RNA","Reagents DL8","Chef supplies (plásticos)","Placas","Solutions DL8"
         ],
-        # 2) kit-Chef (TEMPLADO)
         "kit-Chef (TEMPLADO)": [
-            "Ion 540 TM Chef Reagents", "Chef Solutions", "Chef supplies (plásticos)",
-            "Solutions Reagent S5", "Botellas S5"
+            "Ion 540 TM Chef Reagents","Chef Solutions","Chef supplies (plásticos)","Solutions Reagent S5","Botellas S5"
         ],
-        # 3) Chip secuenciación liberación de protones 6 millones de lecturas
         "Chip secuenciación liberación de protones 6 millones de lecturas": [
             "Ion 540 TM Chip Kit"
         ],
-        # 4) Recover All TM Multi-Sample RNA/DNA Isolation workflow-Kit
         "Recover All TM Multi-Sample RNA/DNA Isolation workflow-Kit": [
-            "Kit extracción DNA/RNA", "RecoverAll TM kit (Dnase, protease,…)", "H2O RNA free", "Tubos fondo cónico"
+            "Kit extracción DNA/RNA","RecoverAll TM kit (Dnase, protease,…)","H2O RNA free","Tubos fondo cónico"
         ]
     },
     "OCA PLUS": {
-        # 1) Panel OCA-PLUS Library Assay Chef Ready
         "Panel OCA-PLUS Library Assay Chef Ready": [
-            "Primers DNA", "Uracil-DNA Glycosylase heat-labile", "Reagents DL8",
-            "Chef supplies (plásticos)", "Placas", "Solutions DL8"
+            "Primers DNA","Uracil-DNA Glycosylase heat-labile","Reagents DL8","Chef supplies (plásticos)",
+            "Placas","Solutions DL8"
         ],
-        # 2) kit-Chef (TEMPLADO)
         "kit-Chef (TEMPLADO)": [
-            "Ion 550 TM Chef Reagents", "Chef Solutions", "Chef Supplies (plásticos)",
-            "Solutions Reagent S5", "Botellas S5", "Chip secuenciación Ion 550 TM Chip Kit"
+            "Ion 550 TM Chef Reagents","Chef Solutions","Chef Supplies (plásticos)","Solutions Reagent S5",
+            "Botellas S5","Chip secuenciación Ion 550 TM Chip Kit"
         ],
-        # 3) Recover All TM Multi-Sample RNA/DNA Isolation workflow-Kit
         "Recover All TM Multi-Sample RNA/DNA Isolation workflow-Kit": [
-            "Kit extracción DNA/RNA", "RecoverAll TM kit (Dnase, protease,…)", "H2O RNA free", "Tubos fondo cónico"
+            "Kit extracción DNA/RNA","RecoverAll TM kit (Dnase, protease,…)","H2O RNA free","Tubos fondo cónico"
         ]
     }
 }
 
-# Lista de paneles (para poder filtrar en find_sub_lot)
-panel_order = ["FOCUS", "OCA", "OCA PLUS"]
+panel_order = ["FOCUS","OCA","OCA PLUS"]
 
-# Paleta de colores a usar (se usa el ciclo para asignar a cada grupo)
-colors = [
-    "#FED7D7", "#FEE2E2", "#FFEDD5", "#FEF9C3", "#D9F99D",
-    "#CFFAFE", "#E0E7FF", "#FBCFE8", "#F9A8D4", "#E9D5FF",
-    "#FFD700", "#F0FFF0", "#D1FAE5", "#BAFEE2", "#A7F3D0", "#FFEC99"
+# Paleta de colores
+color_list = [
+    "#FED7D7","#FEE2E2","#FFEDD5","#FEF9C3","#D9F99D",
+    "#CFFAFE","#E0E7FF","#FBCFE8","#F9A8D4","#E9D5FF",
+    "#FFD700","#F0FFF0","#D1FAE5","#BAFEE2","#A7F3D0","#FFEC99"
 ]
 
-# ----------------- Función de búsqueda de grupo -----------------
-def find_sub_lot(nombre_prod: str):
+# ----------------- Buscar sub-lote en LOTS_DATA -----------------
+def find_sub_lot(nombre_prod: str, panel_name: str):
     """
-    Devuelve (panel, sublote, esPrincipal) si se encuentra una coincidencia,
-    comparando en minúsculas. Se busca si el nombre coincide exactamente con el
-    título del grupo o con alguno de sus reactivos.
+    Si 'nombre_prod' coincide con un sub-lote principal o uno de sus reactivos
+    en LOTS_DATA[panel_name], devuelve (sub_lote, esPrincipal).
+    De lo contrario, None.
+    Comparación case-insensitive.
     """
-    nombre_prod_clean = str(nombre_prod).strip().lower()
-    for p in panel_order:
-        subdict = LOTS_DATA.get(p, {})
-        for sublote_name, reactivos in subdict.items():
-            if nombre_prod_clean == sublote_name.strip().lower():
-                return (p, sublote_name, True)
-            for reactivo in reactivos:
-                if nombre_prod_clean == reactivo.strip().lower():
-                    return (p, sublote_name, False)
+    if panel_name not in LOTS_DATA:
+        return None
+    subdict = LOTS_DATA[panel_name]
+    np_lower = nombre_prod.strip().lower()
+    for sub_lote, reactivos in subdict.items():
+        if np_lower == sub_lote.strip().lower():
+            return (sub_lote, True)
+        for r in reactivos:
+            if np_lower == r.strip().lower():
+                return (sub_lote, False)
     return None
 
-# ----------------- Función de agrupación y ordenamiento -----------------
-def build_group_info(df: pd.DataFrame, panel_default=None):
+# ----------------- Lógica grouping final -----------------
+def group_rows(df: pd.DataFrame, panel_name: str):
     """
-    Crea las columnas:
-      - GroupTitle: título del grupo según LOTS_DATA (o "Sin Grupo" si no hay match)
-      - EsTitulo: True si el registro coincide con el título (para poner en negrita)
-      - ColorGroup: color asignado a ese grupo
-      - GroupCount: cantidad de registros en ese grupo
-      - MultiSort: 0 si el grupo tiene más de 1 integrante, 1 si es solitario
-      - NotTitulo: 0 para filas título, 1 para el resto (para forzar que el título vaya primero)
+    - Si 'Nombre producto' coincide con un sub-lote principal o reactivo => agrupa con ese sub-lote.
+    - Si no, agrupa por la "Ref. Saturno" => se usará la Ref. Saturno como 'sub-lote' y la
+      fila 'principal' es la primera encontrada de ese Saturno. 
+    Devolvemos col extra: SubLoteName, EsPrincipal, ColorGroup
     """
     df = df.copy()
-    df["GroupTitle"] = None
-    df["EsTitulo"] = False
+    df["SubLoteName"] = None
+    df["EsPrincipal"] = False
+    df["ColorGroup"] = "#FFFFFF"
+
+    # 1) Asignar sub-lote según LOTS_DATA
+    # 2) Si no, usar "Ref. Saturno"
+    # 3) Asignar color
+
+    # Recolectar sub-lotes que vayamos asignando
+    assigned_sub_lotes = {}
+    color_cycle = itertools.cycle(color_list)
+
+    # Pre-computar si "Ref. Saturno" es 0 o no, para saber si es un "grupo" distinto
+    # (Puede haber un Saturno=0 que se repite, p.ej. sin panel => se agrupan juntos.)
     for i, row in df.iterrows():
-        nombre = str(row.get("Nombre producto", "")).strip()
-        info = find_sub_lot(nombre)
-        # Si se encontró y coincide con el panel (o se ignora panel_default si es None)
-        if info is not None and (panel_default is None or info[0] == panel_default):
-            panel, group_title, is_main = info
-            df.at[i, "GroupTitle"] = group_title
-            df.at[i, "EsTitulo"] = is_main
+        np_name = str(row.get("Nombre producto","")).strip()
+        sub_info = find_sub_lot(np_name, panel_name)
+        if sub_info is not None:
+            # (sub_lote, is_main)
+            sub_lote, is_main = sub_info
+            df.at[i,"SubLoteName"] = sub_lote
+            df.at[i,"EsPrincipal"] = is_main
         else:
-            df.at[i, "GroupTitle"] = "Sin Grupo"
-            df.at[i, "EsTitulo"] = False
+            # agrupa por 'Ref. Saturno' => 'sub-lote' = "RefSat_{xxx}"
+            ref_sat = row.get("Ref. Saturno", 0)
+            df.at[i,"SubLoteName"] = f"RefSat_{ref_sat}"
+            # esPrincipal => si es la 1ra fila en la que aparece esa RefSat
+            # lo marcamos en un dict
+            # y la 1ra vez => is_main = True
+            # resto => is_main=False
+            if f"RefSat_{ref_sat}" not in assigned_sub_lotes:
+                assigned_sub_lotes[f"RefSat_{ref_sat}"] = True
+                df.at[i,"EsPrincipal"] = True
+            else:
+                df.at[i,"EsPrincipal"] = False
 
-    # Asignar un color único a cada grupo
-    unique_groups = sorted(df["GroupTitle"].unique())
-    group_color_mapping = {}
-    color_cycle_local = itertools.cycle(colors)
-    for group in unique_groups:
-        group_color_mapping[group] = next(color_cycle_local)
-    df["ColorGroup"] = df["GroupTitle"].apply(lambda x: group_color_mapping.get(x, "#FFFFFF"))
+    # Recolectar lista sub-lotes usados
+    unique_sub_lotes = df["SubLoteName"].unique().tolist()
+    color_map = {}
+    for sl in sorted(unique_sub_lotes):
+        color_map[sl] = next(color_cycle)
 
-    # Contar integrantes por grupo
-    group_sizes = df.groupby("GroupTitle").size().to_dict()
-    df["GroupCount"] = df["GroupTitle"].apply(lambda x: group_sizes.get(x, 0))
-    # MultiSort: 0 para grupos con más de 1 integrante, 1 para solitarios
-    df["MultiSort"] = df["GroupCount"].apply(lambda x: 0 if x > 1 else 1)
-    # NotTitulo: 0 para fila título (para que aparezca primero), 1 para el resto
-    df["NotTitulo"] = df["EsTitulo"].apply(lambda x: 0 if x else 1)
+    # Asignar color
+    for i, row in df.iterrows():
+        sl = row.get("SubLoteName")
+        df.at[i,"ColorGroup"] = color_map.get(sl,"#FFFFFF")
+
     return df
 
-# ----------------- Función de estilo para la tabla -----------------
+
 def calc_alarma(row):
-    """Col 'Alarma': '🔴' si Stock=0 y Fecha Pedida es nula, '🟨' si Stock=0 y Fecha Pedida no es nula."""
+    """Col 'Alarma': '🔴' si Stock=0 y Fecha Pedida=None, '🟨' si Stock=0 y FechaPed!=None."""
     s = row.get("Stock", 0)
     fp = row.get("Fecha Pedida", None)
     if s == 0 and pd.isna(fp):
@@ -221,310 +223,223 @@ def calc_alarma(row):
     return ""
 
 def style_lote(row):
-    """Colorea la fila según 'ColorGroup'; si EsTitulo es True se pone en negrita 'Nombre producto'."""
+    """Aplica color a toda la fila, y si EsPrincipal=True, pone 'Nombre producto' en negrita."""
     bg = row.get("ColorGroup", "")
-    es_titulo = row.get("EsTitulo", False)
+    es_main = row.get("EsPrincipal", False)
     styles = [f"background-color:{bg}"] * len(row)
-    if es_titulo and "Nombre producto" in row.index:
-        idx = row.index.get_loc("Nombre producto")
-        styles[idx] += "; font-weight:bold"
+    if es_main:
+        # Poner en negrita 'Nombre producto'
+        if "Nombre producto" in row.index:
+            idx = row.index.get_loc("Nombre producto")
+            styles[idx] += "; font-weight:bold"
     return styles
 
-# -------------------------------------------------------------------------
 # BARRA LATERAL
-# -------------------------------------------------------------------------
 with st.sidebar:
-    with st.expander("🔎 Ver / Gestionar versiones guardadas", expanded=False):
-        if data_dict:
-            files = sorted(os.listdir(VERSIONS_DIR))
-            versions_no_original = [f for f in files if f != "Stock_Original.xlsx"]
-            if versions_no_original:
-                version_sel = st.selectbox("Selecciona versión:", versions_no_original)
-                confirm_delete = False
+    st.write("## Opciones Base de Datos")
+    if data_dict:
+        files = sorted(os.listdir(VERSIONS_DIR))
+        versions_no_original = [f for f in files if f != "Stock_Original.xlsx"]
+        if versions_no_original:
+            version_sel = st.selectbox("Selecciona versión:", versions_no_original)
+            if version_sel:
+                file_path = os.path.join(VERSIONS_DIR, version_sel)
+                with open(file_path,"rb") as f:
+                    st.download_button("Descargar "+version_sel, data=f, file_name=version_sel)
+                # etc. ... (botones eliminar y limpiar)
 
-                if version_sel:
-                    file_path = os.path.join(VERSIONS_DIR, version_sel)
-                    if os.path.isfile(file_path):
-                        with open(file_path, "rb") as excel_file:
-                            excel_bytes = excel_file.read()
-                        st.download_button(
-                            label=f"Descargar {version_sel}",
-                            data=excel_bytes,
-                            file_name=version_sel,
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        )
-                    if st.checkbox(f"Confirmar eliminación de '{version_sel}'"):
-                        confirm_delete = True
+    st.write("---")
+    # Reactivo Agotado
+    st.write("### Reactivo Agotado (sin crear versión)")
+    if data_dict:
+        hoja_cons = st.selectbox("Hoja para consumir Reactivo:", list(data_dict.keys()), key="hoja_consume")
+        df_c = data_dict[hoja_cons].copy()
+        df_c = enforce_types(df_c)
 
-                    if st.button("Eliminar esta versión"):
-                        if confirm_delete:
-                            try:
-                                os.remove(file_path)
-                                st.warning(f"Versión '{version_sel}' eliminada.")
-                                st.rerun()
-                            except:
-                                st.error("Error al intentar eliminar la versión.")
-                        else:
-                            st.error("Marca la casilla para confirmar la eliminación.")
-            else:
-                st.write("No hay versiones guardadas (excepto la original).")
-
-            if st.button("Eliminar TODAS las versiones (excepto original)"):
-                for f in versions_no_original:
-                    try:
-                        os.remove(os.path.join(VERSIONS_DIR, f))
-                    except:
-                        pass
-                st.info("Todas las versiones (excepto la original) eliminadas.")
-                st.rerun()
-
-            if st.button("Eliminar TODAS las versiones excepto la última y la original"):
-                if len(versions_no_original) > 1:
-                    sorted_vers = sorted(versions_no_original)
-                    last_version = sorted_vers[-1]
-                    for f in versions_no_original:
-                        if f != last_version:
-                            try:
-                                os.remove(os.path.join(VERSIONS_DIR, f))
-                            except:
-                                pass
-                    st.info(f"Se han eliminado todas las versiones excepto: {last_version} y Stock_Original.xlsx")
-                    st.rerun()
-                else:
-                    st.write("Solo hay una versión o ninguna versión, no se elimina nada más.")
-
-            if st.button("Limpiar Base de Datos"):
-                st.write("¿Seguro que quieres limpiar la base de datos?")
-                if st.checkbox("Sí, confirmar limpieza."):
-                    original_path = os.path.join(VERSIONS_DIR, "Stock_Original.xlsx")
-                    if os.path.exists(original_path):
-                        shutil.copy(original_path, STOCK_FILE)
-                        st.success("✅ Base de datos restaurada al estado original.")
-                        st.rerun()
-                    else:
-                        st.error("❌ No se encontró la copia original en 'versions/Stock_Original.xlsx'.")
+        if "Nombre producto" in df_c.columns and "Ref. Fisher" in df_c.columns:
+            ds = df_c.apply(lambda r: f"{r['Nombre producto']} ({r['Ref. Fisher']})", axis=1)
         else:
-            st.error("No hay data_dict. Verifica Stock_Original.xlsx.")
-            st.stop()
+            ds = df_c.iloc[:,0].astype(str)
 
-    with st.expander("⚠️ Alarmas", expanded=False):
-        st.write("Col 'Alarma': '🔴' => Stock=0 y Fecha Pedida nula, '🟨' => Stock=0 y Fecha Pedida no nula.")
+        sel_reac = st.selectbox("Reactivo a consumir:", ds.unique())
+        idx_reac = ds[ds==sel_reac].index[0]
+        stock_val = df_c.at[idx_reac,"Stock"] if "Stock" in df_c.columns else 0
+        cantidad = st.number_input("Cantidad consumida", min_value=0, step=1)
 
-    with st.expander("Reactivo Agotado (Consumido en Lab)", expanded=False):
-        if data_dict:
-            st.write("Selecciona hoja y reactivo para consumir stock sin crear versión.")
-            hojas_agotado = list(data_dict.keys())
-            hoja_sel_consumo = st.selectbox("Hoja a consumir:", hojas_agotado, key="cons_hoja_sel")
-            df_agotado = data_dict[hoja_sel_consumo].copy()
-            df_agotado = enforce_types(df_agotado)
+        if st.button("Consumir Stock"):
+            nuevo_stk = max(0, stock_val - cantidad)
+            df_c.at[idx_reac,"Stock"] = nuevo_stk
+            data_dict[hoja_cons] = df_c
+            st.success(f"Consumidas {cantidad} uds. Queda => {nuevo_stk} en stock.")
+    else:
+        st.error("No se pudieron cargar datos.")
 
-            if "Nombre producto" in df_agotado.columns and "Ref. Fisher" in df_agotado.columns:
-                disp_consumo = df_agotado.apply(lambda r: f"{r['Nombre producto']} ({r['Ref. Fisher']})", axis=1)
-            else:
-                disp_consumo = df_agotado.iloc[:, 0].astype(str)
 
-            reactivo_consumir = st.selectbox("Reactivo:", disp_consumo.unique(), key="cons_react_sel")
-            idx_c = disp_consumo[disp_consumo == reactivo_consumir].index[0]
-            stock_c = df_agotado.at[idx_c, "Stock"] if "Stock" in df_agotado.columns else 0
-
-            uds_consumidas = st.number_input("Uds. consumidas", min_value=0, step=1)
-            if st.button("Registrar Consumo en Lab"):
-                nuevo_stock = max(0, stock_c - uds_consumidas)
-                df_agotado.at[idx_c, "Stock"] = nuevo_stock
-                st.warning(f"Consumidas {uds_consumidas} uds. Stock final => {nuevo_stock}")
-                data_dict[hoja_sel_consumo] = df_agotado
-                st.success("No se crea versión, cambios solo en memoria.")
-        else:
-            st.error("No hay data_dict. Revisa Stock_Original.xlsx.")
-            st.stop()
-
-# -------------------------------------------------------------------------
-# CUERPO PRINCIPAL
-# -------------------------------------------------------------------------
-st.title("📦 Control de Stock: Agrupación por Grupos (Título en Negrita y Orden Personalizado)")
-
+# CUERPO
+st.title("📦 Control de Stock con Grupos por LOTS_DATA o Ref. Saturno")
 if not data_dict:
-    st.error("No se pudo cargar la base de datos.")
+    st.error("No hay datos.")
     st.stop()
 
-st.markdown("---")
 st.header("Edición en Hoja Principal y Guardado")
 
-hojas_principales = list(data_dict.keys())
-sheet_name = st.selectbox("Selecciona la hoja a editar:", hojas_principales, key="main_sheet_sel")
-df_main_original = data_dict[sheet_name].copy()
-df_main_original = enforce_types(df_main_original)
+hoja = st.selectbox("Selecciona la Hoja:", list(data_dict.keys()))
+df_main0 = data_dict[hoja].copy()
+df_main0 = enforce_types(df_main0)
 
-# 1) Creamos df para estilo: calculamos alarma y agrupamos según LOTS_DATA para el panel actual.
-df_for_style = df_main_original.copy()
-df_for_style["Alarma"] = df_for_style.apply(calc_alarma, axis=1)
-df_for_style = build_group_info(df_for_style, panel_default=sheet_name)
+# Crea col 'Alarma'
+df_main0["Alarma"] = df_main0.apply(calc_alarma, axis=1)
+# Agrupa => sub-lote (LOTS_DATA) si coincide, si no => agrupa por 'Ref. Saturno'
+df_main0 = group_rows(df_main0, panel_name=hoja)
 
-# 2) Ordenamos: primero los grupos con más de 1 integrante y dentro de ellos el título (EsTitulo=True) al principio; después los solitarios.
-df_for_style.sort_values(by=["MultiSort", "GroupTitle", "NotTitulo"], inplace=True)
-df_for_style.reset_index(drop=True, inplace=True)
+# Ordenar => primero sub-lotes con la misma SubLoteName,
+# dentro => la fila principal primero (EsPrincipal=True), resto después
+df_main0["SortKey"] = df_main0["SubLoteName"].astype(str) + df_main0["EsPrincipal"].apply(lambda b: "0" if b else "1")
+df_main0.sort_values("SortKey", inplace=True)
+df_main0.reset_index(drop=True,inplace=True)
 
-styled_df = df_for_style.style.apply(style_lote, axis=1)
+styled = df_main0.style.apply(style_lote, axis=1)
 
-# Columnas internas a ocultar
-all_cols = df_for_style.columns.tolist()
-cols_to_hide = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupTitle"]
-final_cols = [c for c in all_cols if c not in cols_to_hide]
+# Ocultar col internas => SubLoteName, EsPrincipal, ColorGroup, SortKey
+ocultas = ["SubLoteName","EsPrincipal","ColorGroup","SortKey"]
+final_cols = [c for c in df_main0.columns if c not in ocultas]
+html_table = styled.to_html(columns=final_cols)
 
-table_html = styled_df.to_html(columns=final_cols)
+# Creamos df_main final
+df_main = df_main0.copy()
+df_main.drop(columns=ocultas, inplace=True, errors="ignore")
 
-# 3) df_main final sin columnas internas
-df_main = df_for_style.copy()
-df_main.drop(columns=cols_to_hide, inplace=True, errors="ignore")
+st.write("### Vista de la Hoja (col 'Alarma', grupos, sin col internas)")
+st.write(html_table, unsafe_allow_html=True)
 
-st.write("#### Vista de la Hoja (con columna 'Alarma' y sin columnas internas)")
-st.write(table_html, unsafe_allow_html=True)
-
-# 4) Seleccionar Reactivo a Modificar
+# Selección de Reactivo a Modificar
 if "Nombre producto" in df_main.columns and "Ref. Fisher" in df_main.columns:
-    display_series = df_main.apply(lambda r: f"{r['Nombre producto']} ({r['Ref. Fisher']})", axis=1)
+    ds2 = df_main.apply(lambda r: f"{r['Nombre producto']} ({r['Ref. Fisher']})", axis=1)
 else:
-    display_series = df_main.iloc[:, 0].astype(str)
+    ds2 = df_main.iloc[:,0].astype(str)
 
-reactivo_sel = st.selectbox("Selecciona Reactivo a Modificar:", display_series.unique(), key="react_modif")
-row_index = display_series[display_series == reactivo_sel].index[0]
+sel_react = st.selectbox("Selecciona Reactivo:", ds2.unique())
+idx_r = ds2[ds2==sel_react].index[0]
 
-def get_val(col, default=None):
-    return df_main.at[row_index, col] if col in df_main.columns else default
+def gval(col, default=None):
+    return df_main.at[idx_r,col] if col in df_main.columns else default
 
-lote_actual = get_val("NºLote", 0)
-caducidad_actual = get_val("Caducidad", None)
-fecha_pedida_actual = get_val("Fecha Pedida", None)
-fecha_llegada_actual = get_val("Fecha Llegada", None)
-sitio_almacenaje_actual = get_val("Sitio almacenaje", "")
-uds_actual = get_val("Uds.", 0)
-stock_actual = get_val("Stock", 0)
+lote_val = gval("NºLote",0)
+caduc_val = gval("Caducidad",None)
+fped_val = gval("Fecha Pedida",None)
+flleg_val = gval("Fecha Llegada",None)
+sitio_val = gval("Sitio almacenaje","")
+uds_val = gval("Uds.",0)
+stock_val = gval("Stock",0)
 
-colA, colB, colC, colD = st.columns([1, 1, 1, 1])
-with colA:
-    lote_nuevo = st.number_input("Nº de Lote", value=int(lote_actual), step=1)
-    caducidad_nueva = st.date_input("Caducidad", value=caducidad_actual if pd.notna(caducidad_actual) else None)
+c1,c2,c3,c4 = st.columns(4)
+with c1:
+    lote_new = st.number_input("Nº Lote", value=int(lote_val), step=1)
+    cad_new = st.date_input("Caducidad", value=caduc_val if pd.notna(caduc_val) else None)
+with c2:
+    fped_date = st.date_input("Fecha Pedida (fecha)",
+                              value=fped_val.date() if pd.notna(fped_val) else None,
+                              key="fped_date_main")
+    fped_time = st.time_input("Hora Pedida",
+                              value=fped_val.time() if pd.notna(fped_val) else datetime.time(0,0),
+                              key="fped_time_main")
+with c3:
+    flleg_date = st.date_input("Fecha Llegada (fecha)",
+                               value=flleg_val.date() if pd.notna(flleg_val) else None,
+                               key="flleg_date_main")
+    flleg_time = st.time_input("Hora Llegada",
+                               value=flleg_val.time() if pd.notna(flleg_val) else datetime.time(0,0),
+                               key="flleg_time_main")
+with c4:
+    if st.button("Refrescar"):
+        st.experimental_rerun()
 
-with colB:
-    fp_date = st.date_input("Fecha Pedida (fecha)",
-                            value=fecha_pedida_actual.date() if pd.notna(fecha_pedida_actual) else None,
-                            key="fp_date_main")
-    fp_time = st.time_input("Hora Pedida",
-                            value=fecha_pedida_actual.time() if pd.notna(fecha_pedida_actual) else datetime.time(0, 0),
-                            key="fp_time_main")
+fped_new = None
+if fped_date is not None:
+    dt_ped = datetime.datetime.combine(fped_date, fped_time)
+    fped_new = pd.to_datetime(dt_ped)
 
-with colC:
-    fl_date = st.date_input("Fecha Llegada (fecha)",
-                            value=fecha_llegada_actual.date() if pd.notna(fecha_llegada_actual) else None,
-                            key="fl_date_main")
-    fl_time = st.time_input("Hora Llegada",
-                            value=fecha_llegada_actual.time() if pd.notna(fecha_llegada_actual) else datetime.time(0, 0),
-                            key="fl_time_main")
+flleg_new = None
+if flleg_date is not None:
+    dt_lleg = datetime.datetime.combine(flleg_date, flleg_time)
+    flleg_new = pd.to_datetime(dt_lleg)
 
-with colD:
-    st.write("")
-    st.write("")
-    if st.button("Refrescar Página"):
-        st.rerun()
+st.write("Sitio almacenaje")
+opciones_sitio = ["Congelador 1","Congelador 2","Frigorífico","Tª Ambiente"]
+sitio_p = sitio_val.split(" - ")[0] if " - " in sitio_val else sitio_val
+if sitio_p not in opciones_sitio:
+    sitio_p = opciones_sitio[0]
+sel_top = st.selectbox("Almacén Principal", opciones_sitio, index=opciones_sitio.index(sitio_p))
 
-# Convertir a Timestamp
-fecha_pedida_nueva = None
-if fp_date is not None:
-    dt_ped = datetime.datetime.combine(fp_date, fp_time)
-    fecha_pedida_nueva = pd.to_datetime(dt_ped)
+subopc = ""
+if sel_top=="Congelador 1":
+    cajs = [f"Cajón {i}" for i in range(1,9)]
+    subopc = st.selectbox("Cajón (1arriba,8abajo)", cajs)
+elif sel_top=="Congelador 2":
+    cajs = [f"Cajón {i}" for i in range(1,7)]
+    subopc = st.selectbox("Cajón (1arriba,6abajo)", cajs)
+elif sel_top=="Frigorífico":
+    blds = [f"Balda {i}" for i in range(1,8)] + ["Puerta"]
+    subopc = st.selectbox("Baldas(1arriba,7abajo)", blds)
+elif sel_top=="Tª Ambiente":
+    com2 = st.text_input("Comentario (opt)")
+    subopc = com2.strip()
 
-fecha_llegada_nueva = None
-if fl_date is not None:
-    dt_lleg = datetime.datetime.combine(fl_date, fl_time)
-    fecha_llegada_nueva = pd.to_datetime(dt_lleg)
-
-st.write("Sitio de Almacenaje")
-opciones_sitio = ["Congelador 1", "Congelador 2", "Frigorífico", "Tª Ambiente"]
-sitio_principal = sitio_almacenaje_actual.split(" - ")[0] if " - " in sitio_almacenaje_actual else sitio_almacenaje_actual
-if sitio_principal not in opciones_sitio:
-    sitio_principal = opciones_sitio[0]
-sitio_top = st.selectbox("Tipo Almacenaje", opciones_sitio, index=opciones_sitio.index(sitio_principal))
-
-subopcion = ""
-if sitio_top == "Congelador 1":
-    cajones = [f"Cajón {i}" for i in range(1, 9)]
-    subopcion = st.selectbox("Cajón (1 Arriba,8 Abajo)", cajones)
-elif sitio_top == "Congelador 2":
-    cajones = [f"Cajón {i}" for i in range(1, 7)]
-    subopcion = st.selectbox("Cajón (1 Arriba,6 Abajo)", cajones)
-elif sitio_top == "Frigorífico":
-    baldas = [f"Balda {i}" for i in range(1, 8)] + ["Puerta"]
-    subopcion = st.selectbox("Baldas (1 Arriba, 7 Abajo)", baldas)
-elif sitio_top == "Tª Ambiente":
-    comentario = st.text_input("Comentario (opcional)")
-    subopcion = comentario.strip()
-
-if subopcion:
-    sitio_almacenaje_nuevo = f"{sitio_top} - {subopcion}"
+if subopc:
+    sitio_new = f"{sel_top} - {subopc}"
 else:
-    sitio_almacenaje_nuevo = sitio_top
+    sitio_new = sel_top
 
 if st.button("Guardar Cambios"):
-    # Si llega => borramos pedida
-    if pd.notna(fecha_llegada_nueva):
-        fecha_pedida_nueva = pd.NaT
+    # si llega => borramos pedida
+    if pd.notna(flleg_new):
+        fped_new = pd.NaT
 
     if "Stock" in df_main.columns:
-        if fecha_llegada_nueva != fecha_llegada_actual and pd.notna(fecha_llegada_nueva):
-            df_main.at[row_index, "Stock"] = stock_actual + uds_actual
-            st.info(f"Sumadas {uds_actual} uds al stock => {stock_actual + uds_actual}")
+        if flleg_new!=flleg_val and pd.notna(flleg_new):
+            df_main.at[idx_r,"Stock"] = stock_val + uds_val
+            st.info(f"Añadidas {uds_val} uds. => {stock_val + uds_val}")
 
-    # Casting para evitar FutureWarning
+    # Asignar
     if "NºLote" in df_main.columns:
-        df_main.at[row_index, "NºLote"] = int(lote_nuevo)
-
+        df_main.at[idx_r,"NºLote"] = int(lote_new)
     if "Caducidad" in df_main.columns:
-        if pd.notna(caducidad_nueva):
-            df_main.at[row_index, "Caducidad"] = pd.to_datetime(caducidad_nueva)
+        if pd.notna(cad_new):
+            df_main.at[idx_r,"Caducidad"] = pd.to_datetime(cad_new)
         else:
-            df_main.at[row_index, "Caducidad"] = pd.NaT
-
+            df_main.at[idx_r,"Caducidad"] = pd.NaT
     if "Fecha Pedida" in df_main.columns:
-        if pd.notna(fecha_pedida_nueva):
-            df_main.at[row_index, "Fecha Pedida"] = pd.to_datetime(fecha_pedida_nueva)
+        if pd.notna(fped_new):
+            df_main.at[idx_r,"Fecha Pedida"] = pd.to_datetime(fped_new)
         else:
-            df_main.at[row_index, "Fecha Pedida"] = pd.NaT
-
+            df_main.at[idx_r,"Fecha Pedida"] = pd.NaT
     if "Fecha Llegada" in df_main.columns:
-        if pd.notna(fecha_llegada_nueva):
-            df_main.at[row_index, "Fecha Llegada"] = pd.to_datetime(fecha_llegada_nueva)
+        if pd.notna(flleg_new):
+            df_main.at[idx_r,"Fecha Llegada"] = pd.to_datetime(flleg_new)
         else:
-            df_main.at[row_index, "Fecha Llegada"] = pd.NaT
-
+            df_main.at[idx_r,"Fecha Llegada"] = pd.NaT
     if "Sitio almacenaje" in df_main.columns:
-        df_main.at[row_index, "Sitio almacenaje"] = sitio_almacenaje_nuevo
+        df_main.at[idx_r,"Sitio almacenaje"] = sitio_new
 
-    # Guardamos df_main en data_dict
-    data_dict[sheet_name] = df_main
+    data_dict[hoja] = df_main
 
-    # Al generar Excel, eliminamos las columnas internas
+    # Guardar
     new_file = crear_nueva_version_filename()
     with pd.ExcelWriter(new_file, engine="openpyxl") as writer:
-        for sht, df_sht in data_dict.items():
-            # Eliminamos columnas internas si existen
-            cols_internos = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupTitle"]
-            temp = df_sht.drop(columns=cols_internos, errors="ignore")
-            temp.to_excel(writer, sheet_name=sht, index=False)
+        for sht, dataf in data_dict.items():
+            ocultar = ["SubLoteName","EsPrincipal","ColorGroup","SortKey"]
+            df_save = dataf.drop(columns=ocultar, errors="ignore")
+            df_save.to_excel(writer, sheet_name=sht, index=False)
 
     with pd.ExcelWriter(STOCK_FILE, engine="openpyxl") as writer:
-        for sht, df_sht in data_dict.items():
-            cols_internos = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupTitle"]
-            temp = df_sht.drop(columns=cols_internos, errors="ignore")
-            temp.to_excel(writer, sheet_name=sht, index=False)
+        for sht, dataf in data_dict.items():
+            ocultar = ["SubLoteName","EsPrincipal","ColorGroup","SortKey"]
+            df_save = dataf.drop(columns=ocultar, errors="ignore")
+            df_save.to_excel(writer, sheet_name=sht, index=False)
 
-    st.success(f"✅ Cambios guardados en '{new_file}' y '{STOCK_FILE}'.")
+    st.success(f"Guardado en {new_file} y {STOCK_FILE}.")
 
-    # Generamos Excel en memoria de la hoja actual
-    excel_bytes = generar_excel_en_memoria(df_main, sheet_nm=sheet_name)
-    st.download_button(
-        label="Descargar Excel modificado",
-        data=excel_bytes,
-        file_name="Reporte_Stock.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-    st.rerun()
+    excel_bytes = generar_excel_en_memoria(df_main, sheet_nm=hoja)
+    st.download_button("Descargar Excel modificado", excel_bytes, "Reporte_Stock.xlsx",
+                       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    st.experimental_rerun()
