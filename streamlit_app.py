@@ -268,17 +268,16 @@ with st.sidebar:
                     st.write("Solo hay una versión o ninguna versión, no se elimina nada más.")
 
             # --- Botón de Limpiar Base de Datos ---
-            if st.button("Limpiar Base de Datos"):
-                st.write("¿Seguro que quieres limpiar la base de datos?")
-                if st.checkbox("Sí, confirmar limpieza."):
-                    original_path = os.path.join(VERSIONS_DIR, "Stock_Original.xlsx")
-                    if os.path.exists(original_path):
-                        # Copia la versión original sobre el archivo principal
-                        shutil.copy(original_path, STOCK_FILE)
-                        st.success("✅ Base de datos restaurada al estado original.")
-                        st.rerun()
-                    else:
-                        st.error("❌ No se encontró la copia original en 'versions/Stock_Original.xlsx'.")
+            limpiar_confirmado = st.checkbox("Confirmar limpieza de la base de datos", key="confirmar_limpiar")
+            if st.button("Limpiar Base de Datos") and limpiar_confirmado:
+                original_path = os.path.join(VERSIONS_DIR, "Stock_Original.xlsx")
+                if os.path.exists(original_path):
+                    # Copia la versión original sobre el archivo principal
+                    shutil.copy(original_path, STOCK_FILE)
+                    st.success("✅ Base de datos restaurada al estado original.")
+                    st.rerun()
+                else:
+                    st.error("❌ No se encontró la copia original en 'versions/Stock_Original.xlsx'.")
         else:
             st.error("No hay data_dict. Verifica Stock_Original.xlsx.")
             st.stop()
