@@ -274,9 +274,10 @@ with st.sidebar:
                 else:
                     st.write("Solo hay una versión o ninguna versión, no se elimina nada más.")
 
+            st.write("¿Seguro que quieres limpiar la base de datos?")
+            confirm_clean = st.checkbox("Sí, confirmar limpieza de la base de datos.")
             if st.button("Limpiar Base de Datos"):
-                st.write("¿Seguro que quieres limpiar la base de datos?")
-                if st.checkbox("Sí, confirmar limpieza."):
+                if confirm_clean:
                     original_path = os.path.join(VERSIONS_DIR, "Stock_Original.xlsx")
                     if os.path.exists(original_path):
                         shutil.copy(original_path, STOCK_FILE)
@@ -284,6 +285,8 @@ with st.sidebar:
                         st.rerun()
                     else:
                         st.error("❌ No se encontró la copia original en 'versions/Stock_Original.xlsx'.")
+                else:
+                    st.error("Marca la casilla para confirmar la limpieza.")
         else:
             st.error("No hay data_dict. Verifica Stock_Original.xlsx.")
             st.stop()
@@ -520,3 +523,21 @@ if st.button("Guardar Cambios"):
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
     st.rerun()
+
+# -------------------------------------------------------------------------
+# Botón para borrar la información añadida en la línea (resetear la fila a su estado original)
+# -------------------------------------------------------------------------
+st.markdown("---")
+st.subheader("Acciones Adicionales")
+if st.button("Borrar información de esta línea"):
+    # Se utiliza la combinación de "Ref. Fisher" y "Nombre producto" para identificar la fila original
+    ref_fisher = get_val("Ref. Fisher")
+    nombre_producto = get_val("Nombre producto")
+    original_row = df_main_original[(df_main_original["Ref. Fisher"] == ref_fisher) & (df_main_original["Nombre producto"] == nombre_producto)]
+    if not original_row.empty:
+        df_main.loc[row_index] = original_row.iloc[0]
+        data_dict[sheet_name] = df_main
+        st.success("La información de la línea ha sido revertida a su estado original.")
+        st.rerun()
+    else:
+        st.error("No se encontró la información original para esta línea.")
