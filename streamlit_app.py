@@ -351,6 +351,7 @@ df_main.drop(columns=cols_to_hide, inplace=True, errors="ignore")
 df_display = df_main.copy()
 df_display["Acciones"] = "Reset"
 
+# Configuración de AgGrid para una visualización más amplia e intuitiva
 gb = GridOptionsBuilder.from_dataframe(df_display)
 cell_button = JsCode('''
 function(params) {
@@ -359,6 +360,8 @@ function(params) {
 ''')
 gb.configure_column("Acciones", cellRenderer=cell_button, width=100, suppressSizeToFit=True)
 grid_options = gb.build()
+# Definir el layout para que la grilla se ajuste mejor al contenido
+grid_options['domLayout'] = 'normal'  # Puedes probar con 'autoHeight' también
 
 grid_response = AgGrid(
     df_display,
@@ -366,9 +369,10 @@ grid_response = AgGrid(
     update_mode=GridUpdateMode.NO_UPDATE,
     data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
     allow_unsafe_jscode=True,
-    height=400,
+    height=600,  # Aumenta la altura (antes estaba en 400)
     fit_columns_on_grid_load=True,
 )
+
 
 # Capturamos el clic en el botón "Reset" de la columna "Acciones"
 if grid_response.get("cellClicked"):
