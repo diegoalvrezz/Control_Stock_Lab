@@ -7,6 +7,9 @@ import os
 from io import BytesIO
 import itertools
 
+# Importamos AgGrid para tener una tabla interactiva
+from st_aggrid import AgGrid, GridOptionsBuilder, JsCode, GridUpdateMode, DataReturnMode
+
 st.set_page_config(page_title="Control de Stock con Lotes", layout="centered")
 
 STOCK_FILE = "Stock_Original.xlsx"
@@ -83,7 +86,6 @@ def generar_excel_en_memoria(df_act: pd.DataFrame, sheet_nm="Hoja1"):
 # -------------------------------------------------------------------------
 # DICCIONARIO DE LOTES (definición de grupos)
 # -------------------------------------------------------------------------
-# Los títulos (claves) se definen para cada panel.
 LOTS_DATA = {
     "FOCUS": {
         "Panel Oncomine Focus Library Assay Chef Ready": [
@@ -128,17 +130,14 @@ LOTS_DATA = {
     }
 }
 
-# Para agrupar usaremos "Ref. Saturno"
 panel_order = ["FOCUS", "OCA", "OCA PLUS"]
 
-# Paleta de colores para asignar a cada grupo
 colors = [
     "#FED7D7", "#FEE2E2", "#FFEDD5", "#FEF9C3", "#D9F99D",
     "#CFFAFE", "#E0E7FF", "#FBCFE8", "#F9A8D4", "#E9D5FF",
     "#FFD700", "#F0FFF0", "#D1FAE5", "#BAFEE2", "#A7F3D0", "#FFEC99"
 ]
 
-# ----------------- Agrupar por Ref. Saturno -----------------
 def build_group_info_by_ref(df: pd.DataFrame, panel_default=None):
     """
     Agrupa los registros según "Ref. Saturno" y asigna:
@@ -179,7 +178,6 @@ def build_group_info_by_ref(df: pd.DataFrame, panel_default=None):
     df["NotTitulo"] = df["EsTitulo"].apply(lambda x: 0 if x else 1)
     return df
 
-# ----------------- Función de estilo para la tabla -----------------
 def calc_alarma(row):
     """Col 'Alarma': '🔴' si Stock=0 y Fecha Pedida es nula, '🟨' si Stock=0 y Fecha Pedida no es nula."""
     s = row.get("Stock", 0)
@@ -200,8 +198,6 @@ def style_lote(row):
         styles[idx] += "; font-weight:bold"
     return styles
 
-# -------------------------------------------------------------------------
-# Inyectar CSS para agrandar el multiselect
 st.markdown("""
     <style>
     .big-select select {
@@ -339,32 +335,64 @@ sheet_name = st.selectbox("Selecciona la hoja a editar:", hojas_principales, key
 df_main_original = data_dict[sheet_name].copy()
 df_main_original = enforce_types(df_main_original)
 
-# 1) Creamos df para estilo: calculamos alarma y agrupamos por Ref. Saturno
+# 1) Crear df para estilo: calculamos alarma y agrupamos por Ref. Saturno
 df_for_style = df_main_original.copy()
 df_for_style["Alarma"] = df_for_style.apply(calc_alarma, axis=1)
 df_for_style = build_group_info_by_ref(df_for_style, panel_default=sheet_name)
 
-# 2) Ordenamos: primero los grupos con >1 integrante y dentro de ellos la fila título (EsTitulo=True) al inicio; luego los solitarios.
+# 2) Ordenamos y preparamos el df final para editar (sin columnas internas)
 df_for_style.sort_values(by=["MultiSort", "GroupID", "NotTitulo"], inplace=True)
 df_for_style.reset_index(drop=True, inplace=True)
-
-styled_df = df_for_style.style.apply(style_lote, axis=1)
-
-# Columnas internas a ocultar
-all_cols = df_for_style.columns.tolist()
-cols_to_hide = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID"]
-final_cols = [c for c in all_cols if c not in cols_to_hide]
-
-table_html = styled_df.to_html(columns=final_cols)
-
-# 3) df_main final sin columnas internas
 df_main = df_for_style.copy()
+cols_to_hide = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID"]
 df_main.drop(columns=cols_to_hide, inplace=True, errors="ignore")
 
-st.write("#### Vista de la Hoja (con columna 'Alarma' y sin columnas internas)")
-st.write(table_html, unsafe_allow_html=True)
+# 3) Preparamos el DataFrame para AgGrid: agregamos una columna "Acciones" con botón Reset
+df_display = df_main.copy()
+df_display["Acciones"] = "Reset"
 
-# 4) Seleccionar Reactivo a Modificar
+gb = GridOptionsBuilder.from_dataframe(df_display)
+cell_button = JsCode('''
+function(params) {
+  return `<button style="background-color: red; color: white; border: none; padding: 5px;">Reset</button>`;
+}
+''')
+gb.configure_column("Acciones", cellRenderer=cell_button, width=100, suppressSizeToFit=True)
+grid_options = gb.build()
+
+grid_response = AgGrid(
+    df_display,
+    gridOptions=grid_options,
+    update_mode=GridUpdateMode.NO_UPDATE,
+    data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
+    allow_unsafe_jscode=True,
+    height=400,
+    fit_columns_on_grid_load=True,
+)
+
+# Capturamos el clic en el botón "Reset" de la columna "Acciones"
+if grid_response.get("cellClicked"):
+    click_info = grid_response["cellClicked"]
+    if click_info.get("colId") == "Acciones":
+        row_data = click_info.get("data", {})
+        ref_fisher = row_data.get("Ref. Fisher")
+        nombre_producto = row_data.get("Nombre producto")
+        # Se busca la fila original en df_main_original usando "Ref. Fisher" y "Nombre producto"
+        original_row = df_main_original[
+            (df_main_original["Ref. Fisher"] == ref_fisher) &
+            (df_main_original["Nombre producto"] == nombre_producto)
+        ]
+        if not original_row.empty:
+            mask = (df_main["Ref. Fisher"] == ref_fisher) & (df_main["Nombre producto"] == nombre_producto)
+            df_main.loc[mask] = original_row.iloc[0]
+            data_dict[sheet_name] = df_main
+            st.success(f"La información del reactivo '{nombre_producto} ({ref_fisher})' se ha restablecido.")
+            st.rerun()
+        else:
+            st.error("No se encontró la información original para este reactivo.")
+
+st.markdown("---")
+st.write("#### Selección de Reactivo para Modificar (además de la acción 'Reset' en la grilla)")
 if "Nombre producto" in df_main.columns and "Ref. Fisher" in df_main.columns:
     display_series = df_main.apply(lambda r: f"{r['Nombre producto']} ({r['Ref. Fisher']})", axis=1)
 else:
@@ -408,7 +436,6 @@ with colD:
     if st.button("Refrescar Página"):
         st.rerun()
 
-# Convertir a Timestamp
 fecha_pedida_nueva = None
 if fp_date is not None:
     dt_ped = datetime.datetime.combine(fp_date, fp_time)
@@ -442,10 +469,8 @@ if subopcion:
 else:
     sitio_almacenaje_nuevo = sitio_top
 
-# NUEVA SECCIÓN: Si se ingresó Fecha Pedida, preguntar por el pedido del grupo completo.
 group_order_selected = None
 if pd.notna(fecha_pedida_nueva):
-    # Usamos df_for_style (ya ordenado y con índice reiniciado)
     group_id = df_for_style.at[row_index, "GroupID"]
     group_reactivos = df_for_style[df_for_style["GroupID"] == group_id]
     if not group_reactivos.empty:
@@ -459,9 +484,6 @@ if pd.notna(fecha_pedida_nueva):
         group_order_selected = st.multiselect(f"¿Quieres pedir también los siguientes reactivos del lote **{lot_name}**?", options, default=options)
         st.markdown('</div>', unsafe_allow_html=True)
 
-# -------------------------------------------------------------------------
-# Botón para Guardar Cambios (incluye actualización de Fecha Pedida para el grupo)
-# -------------------------------------------------------------------------
 if st.button("Guardar Cambios"):
     if pd.notna(fecha_llegada_nueva):
         fecha_pedida_nueva = pd.NaT
@@ -491,7 +513,6 @@ if st.button("Guardar Cambios"):
     if "Sitio almacenaje" in df_main.columns:
         df_main.at[row_index, "Sitio almacenaje"] = sitio_almacenaje_nuevo
 
-    # Actualización en grupo: actualizar la "Fecha Pedida" para cada fila seleccionada en el multiselect.
     if pd.notna(fecha_pedida_nueva) and group_order_selected:
         for label in group_order_selected:
             try:
@@ -523,21 +544,3 @@ if st.button("Guardar Cambios"):
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
     st.rerun()
-
-# -------------------------------------------------------------------------
-# Botón para borrar la información añadida en la línea (resetear la fila a su estado original)
-# -------------------------------------------------------------------------
-st.markdown("---")
-st.subheader("Acciones Adicionales")
-if st.button("Borrar información de esta línea"):
-    # Se utiliza la combinación de "Ref. Fisher" y "Nombre producto" para identificar la fila original
-    ref_fisher = get_val("Ref. Fisher")
-    nombre_producto = get_val("Nombre producto")
-    original_row = df_main_original[(df_main_original["Ref. Fisher"] == ref_fisher) & (df_main_original["Nombre producto"] == nombre_producto)]
-    if not original_row.empty:
-        df_main.loc[row_index] = original_row.iloc[0]
-        data_dict[sheet_name] = df_main
-        st.success("La información de la línea ha sido revertida a su estado original.")
-        st.rerun()
-    else:
-        st.error("No se encontró la información original para esta línea.")
