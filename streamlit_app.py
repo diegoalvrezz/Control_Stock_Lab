@@ -80,6 +80,7 @@ def generar_excel_en_memoria(df_act: pd.DataFrame, sheet_nm="Hoja1"):
 # -------------------------------------------------------------------------
 # DICCIONARIO DE LOTES (definición de grupos)
 # -------------------------------------------------------------------------
+# Los títulos (claves) se definen para cada panel.
 LOTS_DATA = {
     "FOCUS": {
         "Panel Oncomine Focus Library Assay Chef Ready": [
@@ -133,7 +134,16 @@ colors = [
 ]
 
 def build_group_info_by_ref(df: pd.DataFrame, panel_default=None):
-    """Agrupa los registros según 'Ref. Saturno' y asigna información de grupo."""
+    """
+    Agrupa los registros según "Ref. Saturno" y asigna:
+      - GroupID igual a "Ref. Saturno"
+      - GroupCount: tamaño del grupo
+      - ColorGroup: color asignado a ese grupo
+      - EsTitulo: se marca como título la fila cuyo "Nombre producto" coincida con
+        alguno de los títulos definidos en LOTS_DATA para el panel; si no se encuentra,
+        se marca la primera fila del grupo.
+      - MultiSort y NotTitulo para ordenar.
+    """
     df = df.copy()
     df["GroupID"] = df["Ref. Saturno"]
     group_sizes = df.groupby("GroupID").size().to_dict()
@@ -164,7 +174,7 @@ def build_group_info_by_ref(df: pd.DataFrame, panel_default=None):
     return df
 
 def calc_alarma(row):
-    """Devuelve ícono de alarma según Stock y Fecha Pedida."""
+    """Devuelve ícono según Stock y Fecha Pedida."""
     s = row.get("Stock", 0)
     fp = row.get("Fecha Pedida", None)
     if s == 0 and pd.isna(fp):
@@ -174,7 +184,7 @@ def calc_alarma(row):
     return ""
 
 def style_lote(row):
-    """Aplica estilo según 'ColorGroup'; si EsTitulo es True, pone en negrita 'Nombre producto'."""
+    """Aplica estilo según 'ColorGroup'; si EsTitulo es True, negrita en 'Nombre producto'."""
     bg = row.get("ColorGroup", "")
     es_titulo = row.get("EsTitulo", False)
     styles = [f"background-color:{bg}"] * len(row)
@@ -192,41 +202,52 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# DEFINICIÓN GLOBAL DE LA HOJA A EDITAR: Seleccionamos en la barra lateral
-hojas_principales = list(data_dict.keys())
-sheet_name = st.sidebar.selectbox("Selecciona la hoja a editar:", hojas_principales, key="sheet_name")
-
 # -------------------------------------------------------------------------
-# BARRA LATERAL: Otras funciones
+# CONTROL DE VERSIONES (INTOCABLE)
 # -------------------------------------------------------------------------
-with st.sidebar:
-    with st.expander("Reactivo Agotado (Consumido en Lab)", expanded=False):
-        if data_dict:
-            st.write("Selecciona hoja y reactivo para consumir stock sin crear versión.")
-            hoja_sel_consumo = st.selectbox("Hoja a consumir:", hojas_principales, key="cons_hoja_sel")
-            df_agotado = data_dict[hoja_sel_consumo].copy()
-            df_agotado = enforce_types(df_agotado)
-            if "Nombre producto" in df_agotado.columns and "Ref. Fisher" in df_agotado.columns:
-                disp_consumo = df_agotado.apply(lambda r: f"{r['Nombre producto']} ({r['Ref. Fisher']})", axis=1)
-            else:
-                disp_consumo = df_agotado.iloc[:, 0].astype(str)
-            reactivo_consumir = st.selectbox("Reactivo:", disp_consumo.unique(), key="cons_react_sel")
-            idx_c = disp_consumo[disp_consumo == reactivo_consumir].index[0]
-            stock_c = df_agotado.at[idx_c, "Stock"] if "Stock" in df_agotado.columns else 0
-            uds_consumidas = st.number_input("Uds. consumidas", min_value=0, step=1)
-            if st.button("Registrar Consumo en Lab"):
-                nuevo_stock = max(0, stock_c - uds_consumidas)
-                df_agotado.at[idx_c, "Stock"] = nuevo_stock
-                st.warning(f"Consumidas {uds_consumidas} uds. Stock final => {nuevo_stock}")
-                data_dict[hoja_sel_consumo] = df_agotado
-                st.success("No se crea versión, cambios solo en memoria.")
+with st.sidebar.expander("Ver / Gestionar versiones guardadas", expanded=False):
+    if data_dict:
+        files = sorted(os.listdir(VERSIONS_DIR))
+        versions_no_original = [f for f in files if f != "Stock_Original.xlsx"]
+        if versions_no_original:
+            version_sel = st.selectbox("Selecciona versión:", versions_no_original, key="version_sel")
+            if version_sel:
+                file_path = os.path.join(VERSIONS_DIR, version_sel)
+                if os.path.isfile(file_path):
+                    with open(file_path, "rb") as excel_file:
+                        excel_bytes = excel_file.read()
+                    st.download_button(
+                        label=f"Descargar {version_sel}",
+                        data=excel_bytes,
+                        file_name=version_sel,
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+                if st.button("Eliminar esta versión"):
+                    try:
+                        os.remove(file_path)
+                        st.warning(f"Versión '{version_sel}' eliminada.")
+                        st.experimental_rerun()
+                    except Exception as e:
+                        st.error(f"Error al eliminar versión: {e}")
+        else:
+            st.write("No hay versiones guardadas (excepto la original).")
+        if st.button("Eliminar TODAS las versiones (excepto original)"):
+            for f in versions_no_original:
+                try:
+                    os.remove(os.path.join(VERSIONS_DIR, f))
+                except:
+                    pass
+            st.info("Todas las versiones (excepto la original) eliminadas.")
+            st.experimental_rerun()
+    else:
+        st.error("No hay data_dict. Verifica Stock_Original.xlsx.")
 
 # -------------------------------------------------------------------------
 # SECCIÓN: Recepción de lote completo
 # -------------------------------------------------------------------------
 with st.expander("Recepción de lote completo", expanded=False):
     st.subheader("Confirmar recepción de lote")
-    # Usamos el panel actual (sheet_name) para obtener títulos
+    # Mostrar los títulos de lote según LOTS_DATA del panel actual (sheet_name)
     if sheet_name in LOTS_DATA:
         lot_titles = list(LOTS_DATA[sheet_name].keys())
     else:
@@ -234,13 +255,31 @@ with st.expander("Recepción de lote completo", expanded=False):
     selected_lot = st.selectbox("Seleccione el título del lote", lot_titles, key="selected_lot")
     if selected_lot:
         df_current = enforce_types(data_dict[sheet_name])
+        # Mostrar una tabla con los nombres de los reactivos para identificar el lote
+        st.write("Reactivos del lote:")
+        st.dataframe(df_current[["Nombre producto", "Ref. Fisher"]])
         row_lot = df_current[df_current["Nombre producto"].str.lower() == selected_lot.lower()]
         if not row_lot.empty:
             lot_ref = row_lot.iloc[0]["Ref. Saturno"]
             df_lote = df_current[df_current["Ref. Saturno"] == lot_ref].copy()
             st.write("Edite la información común del lote:")
+            # Para el sitio de almacenaje, replicamos el control de tipo y cajón
+            tipo_almacenaje = st.selectbox("Tipo de Almacenaje", ["Congelador 1", "Congelador 2", "Frigorífico", "Tª Ambiente"], key="tipo_recepcion")
+            subopcion_recep = ""
+            if tipo_almacenaje == "Congelador 1":
+                subopcion_recep = st.selectbox("Cajón (1 Arriba,8 Abajo)", [f"Cajón {i}" for i in range(1,9)], key="cajon_recep")
+            elif tipo_almacenaje == "Congelador 2":
+                subopcion_recep = st.selectbox("Cajón (1 Arriba,6 Abajo)", [f"Cajón {i}" for i in range(1,7)], key="cajon_recep")
+            elif tipo_almacenaje == "Frigorífico":
+                subopcion_recep = st.selectbox("Balda", [f"Balda {i}" for i in range(1,8)] + ["Puerta"], key="balda_recep")
+            elif tipo_almacenaje == "Tª Ambiente":
+                subopcion_recep = st.text_input("Comentario (opcional)", key="coment_recep")
+            sitio_recep = f"{tipo_almacenaje} - {subopcion_recep}" if subopcion_recep else tipo_almacenaje
+
+            # Edición directa de las columnas comunes del lote
             cols_edit = ["NºLote", "Fecha Llegada", "Caducidad", "Sitio almacenaje"]
-            # Usamos st.data_editor (requiere versión 1.18+); actualiza directamente los datos
+            # Actualizamos la columna Sitio almacenaje con el valor de recepción
+            df_lote["Sitio almacenaje"] = sitio_recep
             df_edit = st.data_editor(df_lote[cols_edit], num_rows="dynamic", key="edicion_lote")
             if st.button("Guardar Recepción del Lote"):
                 for idx in df_lote.index:
@@ -249,11 +288,11 @@ with st.expander("Recepción de lote completo", expanded=False):
                 new_file = crear_nueva_version_filename()
                 with pd.ExcelWriter(new_file, engine="openpyxl") as writer:
                     for sht, df_sht in data_dict.items():
-                        temp = df_sht.drop(columns=["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID"], errors="ignore")
+                        temp = df_sht.drop(columns=["ColorGroup","EsTitulo","GroupCount","MultiSort","NotTitulo","GroupID"], errors="ignore")
                         temp.to_excel(writer, sheet_name=sht, index=False)
                 with pd.ExcelWriter(STOCK_FILE, engine="openpyxl") as writer:
                     for sht, df_sht in data_dict.items():
-                        temp = df_sht.drop(columns=["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID"], errors="ignore")
+                        temp = df_sht.drop(columns=["ColorGroup","EsTitulo","GroupCount","MultiSort","NotTitulo","GroupID"], errors="ignore")
                         temp.to_excel(writer, sheet_name=sht, index=False)
                 st.success("Recepción del lote actualizada correctamente.")
                 st.experimental_rerun()
@@ -261,7 +300,7 @@ with st.expander("Recepción de lote completo", expanded=False):
             st.warning("No se encontró un lote con ese título en la hoja actual.")
 
 # -------------------------------------------------------------------------
-# SECCIÓN: Edición individual y guardado
+# SECCIÓN: Edición Individual y Guardado
 # -------------------------------------------------------------------------
 st.title("Control de Stock: Edición Individual")
 st.markdown("---")
