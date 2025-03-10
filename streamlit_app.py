@@ -7,6 +7,14 @@ import os
 from io import BytesIO
 import itertools
 
+# Inicializar flags de "limpiar" en session_state
+if "clear_caducidad" not in st.session_state:
+    st.session_state.clear_caducidad = False
+if "clear_fp" not in st.session_state:
+    st.session_state.clear_fp = False
+if "clear_fl" not in st.session_state:
+    st.session_state.clear_fl = False
+
 st.set_page_config(page_title="Control de Stock con Lotes", layout="centered")
 
 STOCK_FILE = "Stock_Original.xlsx"
@@ -83,7 +91,6 @@ def generar_excel_en_memoria(df_act: pd.DataFrame, sheet_nm="Hoja1"):
 # -------------------------------------------------------------------------
 # DICCIONARIO DE LOTES (definición de grupos)
 # -------------------------------------------------------------------------
-# Los títulos (claves) se definen para cada panel.
 LOTS_DATA = {
     "FOCUS": {
         "Panel Oncomine Focus Library Assay Chef Ready": [
@@ -128,17 +135,14 @@ LOTS_DATA = {
     }
 }
 
-# Para agrupar usaremos "Ref. Saturno"
 panel_order = ["FOCUS", "OCA", "OCA PLUS"]
 
-# Paleta de colores para asignar a cada grupo
 colors = [
     "#FED7D7", "#FEE2E2", "#FFEDD5", "#FEF9C3", "#D9F99D",
     "#CFFAFE", "#E0E7FF", "#FBCFE8", "#F9A8D4", "#E9D5FF",
     "#FFD700", "#F0FFF0", "#D1FAE5", "#BAFEE2", "#A7F3D0", "#FFEC99"
 ]
 
-# ----------------- Agrupar por Ref. Saturno -----------------
 def build_group_info_by_ref(df: pd.DataFrame, panel_default=None):
     """
     Agrupa los registros según "Ref. Saturno" y asigna:
@@ -179,7 +183,6 @@ def build_group_info_by_ref(df: pd.DataFrame, panel_default=None):
     df["NotTitulo"] = df["EsTitulo"].apply(lambda x: 0 if x else 1)
     return df
 
-# ----------------- Función de estilo para la tabla -----------------
 def calc_alarma(row):
     """Col 'Alarma': '🔴' si Stock=0 y Fecha Pedida es nula, '🟨' si Stock=0 y Fecha Pedida no es nula."""
     s = row.get("Stock", 0)
@@ -200,8 +203,6 @@ def style_lote(row):
         styles[idx] += "; font-weight:bold"
     return styles
 
-# -------------------------------------------------------------------------
-# Inyectar CSS para agrandar el multiselect
 st.markdown("""
     <style>
     .big-select select {
@@ -293,7 +294,7 @@ with st.sidebar:
 
     with st.expander("Reactivo Agotado (Consumido en Lab)", expanded=False):
         if data_dict:
-            st.write("Selecciona hoja y reactivo para consumir stock sin crear versión.")
+            st.write("Selecciona hoja y reactivo para consumir stock y guardar versión.")
             hojas_agotado = list(data_dict.keys())
             hoja_sel_consumo = st.selectbox("Hoja a consumir:", hojas_agotado, key="cons_hoja_sel")
             df_agotado = data_dict[hoja_sel_consumo].copy()
@@ -308,13 +309,33 @@ with st.sidebar:
             idx_c = disp_consumo[disp_consumo == reactivo_consumir].index[0]
             stock_c = df_agotado.at[idx_c, "Stock"] if "Stock" in df_agotado.columns else 0
 
-            uds_consumidas = st.number_input("Uds. consumidas", min_value=0, step=1)
+            uds_consumidas = st.number_input("Uds. consumidas", min_value=0, step=1, key="uds_consumidas")
             if st.button("Registrar Consumo en Lab"):
                 nuevo_stock = max(0, stock_c - uds_consumidas)
                 df_agotado.at[idx_c, "Stock"] = nuevo_stock
                 st.warning(f"Consumidas {uds_consumidas} uds. Stock final => {nuevo_stock}")
                 data_dict[hoja_sel_consumo] = df_agotado
-                st.success("No se crea versión, cambios solo en memoria.")
+            if st.button("Guardar Cambios en Consumo Lab"):
+                new_file = crear_nueva_version_filename()
+                with pd.ExcelWriter(new_file, engine="openpyxl") as writer:
+                    for sht, df_sht in data_dict.items():
+                        cols_internos = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID"]
+                        temp = df_sht.drop(columns=cols_internos, errors="ignore")
+                        temp.to_excel(writer, sheet_name=sht, index=False)
+                with pd.ExcelWriter(STOCK_FILE, engine="openpyxl") as writer:
+                    for sht, df_sht in data_dict.items():
+                        cols_internos = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID"]
+                        temp = df_sht.drop(columns=cols_internos, errors="ignore")
+                        temp.to_excel(writer, sheet_name=sht, index=False)
+                st.success(f"✅ Cambios guardados en '{new_file}' y '{STOCK_FILE}'.")
+                excel_bytes = generar_excel_en_memoria(df_agotado, sheet_nm=hoja_sel_consumo)
+                st.download_button(
+                    label="Descargar Excel modificado",
+                    data=excel_bytes,
+                    file_name="Reporte_Stock.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+                st.rerun()
         else:
             st.error("No hay data_dict. Revisa Stock_Original.xlsx.")
             st.stop()
@@ -344,14 +365,10 @@ df_for_style = build_group_info_by_ref(df_for_style, panel_default=sheet_name)
 # 2) Ordenamos: primero los grupos con >1 integrante y dentro de ellos la fila título (EsTitulo=True) al inicio; luego los solitarios.
 df_for_style.sort_values(by=["MultiSort", "GroupID", "NotTitulo"], inplace=True)
 df_for_style.reset_index(drop=True, inplace=True)
-
 styled_df = df_for_style.style.apply(style_lote, axis=1)
-
-# Columnas internas a ocultar
 all_cols = df_for_style.columns.tolist()
 cols_to_hide = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID"]
 final_cols = [c for c in all_cols if c not in cols_to_hide]
-
 table_html = styled_df.to_html(columns=final_cols)
 
 # 3) df_main final sin columnas internas
@@ -381,37 +398,70 @@ sitio_almacenaje_actual = get_val("Sitio almacenaje", "")
 uds_actual = get_val("Uds.", 0)
 stock_actual = get_val("Stock", 0)
 
+# --- Sección de inputs con botones para limpiar (❌) ---
 colA, colB, colC, colD = st.columns([1,1,1,1])
 with colA:
     lote_nuevo = st.number_input("Nº de Lote", value=int(lote_actual), step=1)
-    caducidad_nueva = st.date_input("Caducidad", value=caducidad_actual if pd.notna(caducidad_actual) else None)
+    colA1, colA2 = st.columns([0.85, 0.15])
+    with colA1:
+        # Para date_input se requiere un valor; si existe caducidad_actual se usa su fecha, sino se usa hoy
+        caducidad_val = st.date_input("Caducidad", value=caducidad_actual.date() if (pd.notna(caducidad_actual) and isinstance(caducidad_actual, pd.Timestamp)) else datetime.date.today(), key="caducidad_input")
+    with colA2:
+        if st.button("❌", key="btn_clear_caducidad"):
+            st.session_state.clear_caducidad = True
+    if st.session_state.get("clear_caducidad", False):
+        caducidad_nueva = pd.NaT
+        st.session_state.clear_caducidad = False
+    else:
+        caducidad_nueva = caducidad_val
+
 with colB:
-    fp_date = st.date_input("Fecha Pedida (fecha)",
-                            value=fecha_pedida_actual.date() if pd.notna(fecha_pedida_actual) else None,
-                            key="fp_date_main")
-    fp_time = st.time_input("Hora Pedida",
-                            value=fecha_pedida_actual.time() if pd.notna(fecha_pedida_actual) else datetime.time(0,0),
-                            key="fp_time_main")
+    colB1, colB2, colB3 = st.columns([0.4, 0.4, 0.2])
+    with colB1:
+        fp_date_val = st.date_input("Fecha Pedida (fecha)", value=fecha_pedida_actual.date() if (pd.notna(fecha_pedida_actual) and isinstance(fecha_pedida_actual, pd.Timestamp)) else datetime.date.today(), key="fp_date")
+    with colB2:
+        fp_time_val = st.time_input("Hora Pedida", value=fecha_pedida_actual.time() if (pd.notna(fecha_pedida_actual) and isinstance(fecha_pedida_actual, pd.Timestamp)) else datetime.time(0,0), key="fp_time")
+    with colB3:
+        if st.button("❌", key="btn_clear_fp"):
+            st.session_state.clear_fp = True
+    if st.session_state.get("clear_fp", False):
+        fp_date = None
+        fp_time = None
+        st.session_state.clear_fp = False
+    else:
+        fp_date = fp_date_val
+        fp_time = fp_time_val
+
 with colC:
-    fl_date = st.date_input("Fecha Llegada (fecha)",
-                            value=fecha_llegada_actual.date() if pd.notna(fecha_llegada_actual) else None,
-                            key="fl_date_main")
-    fl_time = st.time_input("Hora Llegada",
-                            value=fecha_llegada_actual.time() if pd.notna(fecha_llegada_actual) else datetime.time(0,0),
-                            key="fl_time_main")
+    colC1, colC2, colC3 = st.columns([0.4, 0.4, 0.2])
+    with colC1:
+        fl_date_val = st.date_input("Fecha Llegada (fecha)", value=fecha_llegada_actual.date() if (pd.notna(fecha_llegada_actual) and isinstance(fecha_llegada_actual, pd.Timestamp)) else datetime.date.today(), key="fl_date")
+    with colC2:
+        fl_time_val = st.time_input("Hora Llegada", value=fecha_llegada_actual.time() if (pd.notna(fecha_llegada_actual) and isinstance(fecha_llegada_actual, pd.Timestamp)) else datetime.time(0,0), key="fl_time")
+    with colC3:
+        if st.button("❌", key="btn_clear_fl"):
+            st.session_state.clear_fl = True
+    if st.session_state.get("clear_fl", False):
+        fl_date = None
+        fl_time = None
+        st.session_state.clear_fl = False
+    else:
+        fl_date = fl_date_val
+        fl_time = fl_time_val
+
 with colD:
     st.write("")
     st.write("")
     if st.button("Refrescar Página"):
         st.rerun()
 
-# Convertir a Timestamp
+# Convertir a Timestamp (si los campos no han sido "limpiados")
 fecha_pedida_nueva = None
-if fp_date is not None:
+if fp_date is not None and fp_time is not None:
     dt_ped = datetime.datetime.combine(fp_date, fp_time)
     fecha_pedida_nueva = pd.to_datetime(dt_ped)
 fecha_llegada_nueva = None
-if fl_date is not None:
+if fl_date is not None and fl_time is not None:
     dt_lleg = datetime.datetime.combine(fl_date, fl_time)
     fecha_llegada_nueva = pd.to_datetime(dt_lleg)
 
@@ -442,7 +492,6 @@ else:
 # NUEVA SECCIÓN: Si se ingresó Fecha Pedida, preguntar por el pedido del grupo completo.
 group_order_selected = None
 if pd.notna(fecha_pedida_nueva):
-    # Usamos df_for_style (ya ordenado y con índice reiniciado)
     group_id = df_for_style.at[row_index, "GroupID"]
     group_reactivos = df_for_style[df_for_style["GroupID"] == group_id]
     if not group_reactivos.empty:
@@ -488,7 +537,6 @@ if st.button("Guardar Cambios"):
     if "Sitio almacenaje" in df_main.columns:
         df_main.at[row_index, "Sitio almacenaje"] = sitio_almacenaje_nuevo
 
-    # Actualización en grupo: actualizar la "Fecha Pedida" para cada fila seleccionada en el multiselect.
     if pd.notna(fecha_pedida_nueva) and group_order_selected:
         for label in group_order_selected:
             try:
