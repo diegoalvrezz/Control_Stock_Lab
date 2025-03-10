@@ -56,18 +56,8 @@ if st.button("Cerrar sesión"):
 
 
 
-if authentication_status:
-    st.success(f"Bienvenido, {name}!")
-elif authentication_status is False:
-    st.error("Usuario o contraseña incorrectos.")
-    st.stop()
-elif authentication_status is None:
-    st.warning("Por favor, ingresa tus credenciales.")
-    st.stop()
 
-if st.button("Cerrar sesión"):
-    authenticator.logout("Cerrar sesión", "main")
-    st.experimental_rerun()
+
 
 # ---------------------------
 # El resto de tu aplicación original desde aquí
