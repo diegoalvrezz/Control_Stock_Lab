@@ -2,3 +2,4 @@ streamlit
 openpyxl==3.1.2
 pandas
 fpdf
+st_aggrid
