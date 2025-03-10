@@ -24,7 +24,15 @@ password_hashes = [
 cookie_key = "mi_cookie_secreta"
 signature_key = "mi_signature_secreta"
 
-authenticator = stauth.Authenticate(names, usernames, password_hashes, cookie_key, signature_key, cookie_expiry_days=1)
+authenticator = stauth.Authenticate(
+    names=names,
+    usernames=usernames,
+    passwords=password_hashes,
+    cookie_name=cookie_key,
+    key=signature_key,
+    cookie_expiry_days=1
+)
+
 name, authentication_status, username = authenticator.login("Inicia sesión", "main")
 
 if authentication_status:
