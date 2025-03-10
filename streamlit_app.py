@@ -17,8 +17,8 @@ credentials = {
     "usernames": {
         "user1": {
             "email": "user1@example.com",
-            "name": "Usuario Uno",
-            "password": "$2b$12$2f3Ko.9wW56pI4g6Jv9H4e9tK/E1D2bbG8/SjKnYewcBFLUY.kYFO"
+            "name": "admin",
+            "password": "$2b$12$j2s41NdHSUTSL.1xEM/GyeKX7dzMZTpyLnq7p/g/j2aldw.KC5FxS"
         },
         "user2": {
             "email": "user2@example.com",
