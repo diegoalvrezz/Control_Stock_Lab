@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit_authenticator as stauth
 import pandas as pd
 import numpy as np
 import datetime
@@ -7,6 +8,41 @@ import os
 from io import BytesIO
 import itertools
 
+# ---------------------------
+# Autenticación
+# ---------------------------
+# Define usuarios, nombres y contraseñas (las contraseñas deben estar hasheadas)
+names = ["Usuario Uno", "Usuario Dos"]
+usernames = ["user1", "user2"]
+# Ejemplo de hashes (para 'password1' y 'password2')
+password_hashes = [
+    "$2b$12$2f3Ko.9wW56pI4g6Jv9H4e9tK/E1D2bbG8/SjKnYewcBFLUY.kYFO",  # hash de 'password1'
+    "$2b$12$F9F3nZL9eFQKyF2.0tKbEe2KKFZQ3LCO6X5FA5u2Lz8mL3yh5Ew0a"   # hash de 'password2'
+]
+
+# Clave para la cookie y firma (cadena secreta)
+cookie_key = "mi_cookie_secreta"
+signature_key = "mi_signature_secreta"
+
+authenticator = stauth.Authenticate(names, usernames, password_hashes, cookie_key, signature_key, cookie_expiry_days=1)
+name, authentication_status, username = authenticator.login("Inicia sesión", "main")
+
+if authentication_status:
+    st.success(f"Bienvenido, {name}!")
+else:
+    if authentication_status is False:
+        st.error("Usuario o contraseña incorrectos.")
+    else:
+        st.warning("Por favor, ingresa tus credenciales.")
+    st.stop()  # Detiene la ejecución si no se autentica correctamente
+
+if st.button("Cerrar sesión"):
+    authenticator.logout("Cerrar sesión", "main")
+    st.experimental_rerun()
+
+# ---------------------------
+# Resto de la aplicación
+# ---------------------------
 st.set_page_config(page_title="Control de Stock con Lotes", layout="centered")
 
 STOCK_FILE = "Stock_Original.xlsx"
@@ -56,14 +92,11 @@ def enforce_types(df: pd.DataFrame):
         df["Uds."] = pd.to_numeric(df["Uds."], errors="coerce").fillna(0).astype(int)
     if "NºLote" in df.columns:
         df["NºLote"] = pd.to_numeric(df["NºLote"], errors="coerce").fillna(0).astype(int)
-
     for col in ["Caducidad", "Fecha Pedida", "Fecha Llegada"]:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce")
-
     if "Sitio almacenaje" in df.columns:
         df["Sitio almacenaje"] = df["Sitio almacenaje"].astype(str)
-
     if "Stock" in df.columns:
         df["Stock"] = pd.to_numeric(df["Stock"], errors="coerce").fillna(0).astype(int)
     return df
@@ -205,7 +238,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # -------------------------------------------------------------------------
-# BARRA LATERAL
+# BARRA LATERAL (con secciones desplegables)
 # -------------------------------------------------------------------------
 with st.sidebar:
     with st.expander("🔎 Ver / Gestionar versiones guardadas", expanded=False):
@@ -272,7 +305,6 @@ with st.sidebar:
             if st.button("Limpiar Base de Datos") and limpiar_confirmado:
                 original_path = os.path.join(VERSIONS_DIR, "Stock_Original.xlsx")
                 if os.path.exists(original_path):
-                    # Copia la versión original sobre el archivo principal
                     shutil.copy(original_path, STOCK_FILE)
                     st.success("✅ Base de datos restaurada al estado original.")
                     st.rerun()
@@ -351,12 +383,12 @@ sheet_name = st.selectbox("Selecciona la hoja a editar:", hojas_principales, key
 df_main_original = data_dict[sheet_name].copy()
 df_main_original = enforce_types(df_main_original)
 
-# 1) Creamos df para estilo: calculamos alarma y agrupamos por Ref. Saturno
+# 1) Crear df para estilo: calcular alarma y agrupar por Ref. Saturno
 df_for_style = df_main_original.copy()
 df_for_style["Alarma"] = df_for_style.apply(calc_alarma, axis=1)
 df_for_style = build_group_info_by_ref(df_for_style, panel_default=sheet_name)
 
-# 2) Ordenamos: primero los grupos con >1 integrante y dentro de ellos la fila título (EsTitulo=True) al inicio; luego los solitarios.
+# 2) Ordenar: primero los grupos con >1 integrante y dentro de ellos la fila título (EsTitulo=True) al inicio; luego los solitarios.
 df_for_style.sort_values(by=["MultiSort", "GroupID", "NotTitulo"], inplace=True)
 df_for_style.reset_index(drop=True, inplace=True)
 styled_df = df_for_style.style.apply(style_lote, axis=1)
@@ -367,7 +399,7 @@ final_cols = [c for c in all_cols if c not in cols_to_hide]
 
 table_html = styled_df.to_html(columns=final_cols)
 
-# 3) df_main final sin columnas internas
+# 3) Crear df_main final sin columnas internas
 df_main = df_for_style.copy()
 df_main.drop(columns=cols_to_hide, inplace=True, errors="ignore")
 
@@ -394,103 +426,66 @@ sitio_almacenaje_actual = get_val("Sitio almacenaje", "")
 uds_actual = get_val("Uds.", 0)
 stock_actual = get_val("Stock", 0)
 
-# -------------------------------------------------------------------------
-# Inputs para Caducidad, Fecha Pedida y Fecha Llegada con opción "Sin fecha"
-# -------------------------------------------------------------------------
+colA, colB, colC, colD = st.columns([1, 1, 1, 1])
+with colA:
+    lote_new = st.number_input("Nº de Lote", value=int(lote_actual), step=1)
+    cad_new = st.date_input("Caducidad", value=caducidad_actual if pd.notna(caducidad_actual) else None)
+with colB:
+    fped_date = st.date_input("Fecha Pedida (fecha)",
+                              value=fecha_pedida_actual.date() if pd.notna(fecha_pedida_actual) else None,
+                              key="fped_date_main")
+    fped_time = st.time_input("Hora Pedida",
+                              value=fecha_pedida_actual.time() if pd.notna(fecha_pedida_actual) else datetime.time(0, 0),
+                              key="fped_time_main")
+with colC:
+    flleg_date = st.date_input("Fecha Llegada (fecha)",
+                               value=fecha_llegada_actual.date() if pd.notna(fecha_llegada_actual) else None,
+                               key="flleg_date_main")
+    flleg_time = st.time_input("Hora Llegada",
+                               value=fecha_llegada_actual.time() if pd.notna(fecha_llegada_actual) else datetime.time(0, 0),
+                               key="flleg_time_main")
+with colD:
+    st.write("")
+    st.write("")
+    if st.button("Refrescar Página"):
+        st.experimental_rerun()
 
-# --- Caducidad ---
-st.write("**Caducidad**")
-col_cad1, col_cad2 = st.columns([3, 1])
-with col_cad1:
-    caducidad_val = (
-        caducidad_actual.date()
-        if (pd.notna(caducidad_actual) and isinstance(caducidad_actual, pd.Timestamp))
-        else datetime.date.today()
-    )
-    caducidad_input = st.date_input("Seleccione la fecha", value=caducidad_val, key="caducidad_input")
-with col_cad2:
-    sin_caducidad = st.checkbox("Sin caducidad", key="caducidad_checkbox")
-if sin_caducidad:
-    caducidad_nueva = pd.NaT
-else:
-    caducidad_nueva = pd.to_datetime(caducidad_input)
+fped_new = None
+if fped_date is not None:
+    dt_ped = datetime.datetime.combine(fped_date, fped_time)
+    fped_new = pd.to_datetime(dt_ped)
+flleg_new = None
+if flleg_date is not None:
+    dt_lleg = datetime.datetime.combine(flleg_date, flleg_time)
+    flleg_new = pd.to_datetime(dt_lleg)
 
-# --- Fecha Pedida ---
-st.write("**Fecha Pedida**")
-col_fp1, col_fp2, col_fp3, col_fp4 = st.columns([1.5, 1.5, 1, 1])
-with col_fp1:
-    fp_date_val = (
-        fecha_pedida_actual.date()
-        if (pd.notna(fecha_pedida_actual) and isinstance(fecha_pedida_actual, pd.Timestamp))
-        else datetime.date.today()
-    )
-    fp_date_input = st.date_input("Fecha", value=fp_date_val, key="fp_date_input")
-with col_fp2:
-    fp_time_val = (
-        fecha_pedida_actual.time()
-        if (pd.notna(fecha_pedida_actual) and isinstance(fecha_pedida_actual, pd.Timestamp))
-        else datetime.time(0, 0)
-    )
-    fp_time_input = st.time_input("Hora", value=fp_time_val, key="fp_time_input")
-with col_fp4:
-    sin_fp = st.checkbox("Sin fecha pedida", key="fp_checkbox")
-if sin_fp:
-    fecha_pedida_nueva = pd.NaT
-else:
-    fecha_pedida_nueva = pd.to_datetime(datetime.datetime.combine(fp_date_input, fp_time_input))
-
-# --- Fecha Llegada ---
-st.write("**Fecha Llegada**")
-col_fl1, col_fl2, col_fl3, col_fl4 = st.columns([1.5, 1.5, 1, 1])
-with col_fl1:
-    fl_date_val = (
-        fecha_llegada_actual.date()
-        if (pd.notna(fecha_llegada_actual) and isinstance(fecha_llegada_actual, pd.Timestamp))
-        else datetime.date.today()
-    )
-    fl_date_input = st.date_input("Fecha", value=fl_date_val, key="fl_date_input")
-with col_fl2:
-    fl_time_val = (
-        fecha_llegada_actual.time()
-        if (pd.notna(fecha_llegada_actual) and isinstance(fecha_llegada_actual, pd.Timestamp))
-        else datetime.time(0, 0)
-    )
-    fl_time_input = st.time_input("Hora", value=fl_time_val, key="fl_time_input")
-with col_fl4:
-    sin_fl = st.checkbox("Sin fecha llegada", key="fl_checkbox")
-if sin_fl:
-    fecha_llegada_nueva = pd.NaT
-else:
-    fecha_llegada_nueva = pd.to_datetime(datetime.datetime.combine(fl_date_input, fl_time_input))
-
-# Sección adicional para Sitio de Almacenaje
 st.write("Sitio de Almacenaje")
 opciones_sitio = ["Congelador 1", "Congelador 2", "Frigorífico", "Tª Ambiente"]
-sitio_principal = sitio_almacenaje_actual.split(" - ")[0] if " - " in sitio_almacenaje_actual else sitio_almacenaje_actual
-if sitio_principal not in opciones_sitio:
-    sitio_principal = opciones_sitio[0]
-sitio_top = st.selectbox("Tipo Almacenaje", opciones_sitio, index=opciones_sitio.index(sitio_principal))
-subopcion = ""
-if sitio_top == "Congelador 1":
-    cajones = [f"Cajón {i}" for i in range(1,9)]
-    subopcion = st.selectbox("Cajón (1 Arriba,8 Abajo)", cajones)
-elif sitio_top == "Congelador 2":
-    cajones = [f"Cajón {i}" for i in range(1,7)]
-    subopcion = st.selectbox("Cajón (1 Arriba,6 Abajo)", cajones)
-elif sitio_top == "Frigorífico":
-    baldas = [f"Balda {i}" for i in range(1,8)] + ["Puerta"]
-    subopcion = st.selectbox("Baldas (1 Arriba, 7 Abajo)", baldas)
-elif sitio_top == "Tª Ambiente":
-    comentario = st.text_input("Comentario (opcional)")
-    subopcion = comentario.strip()
-if subopcion:
-    sitio_almacenaje_nuevo = f"{sitio_top} - {subopcion}"
+sitio_p = sitio_almacenaje_actual.split(" - ")[0] if " - " in sitio_almacenaje_actual else sitio_almacenaje_actual
+if sitio_p not in opciones_sitio:
+    sitio_p = opciones_sitio[0]
+sel_top = st.selectbox("Almacén Principal", opciones_sitio, index=opciones_sitio.index(sitio_p))
+subopc = ""
+if sel_top == "Congelador 1":
+    cajs = [f"Cajón {i}" for i in range(1, 9)]
+    subopc = st.selectbox("Cajón (1 Arriba,8 Abajo)", cajs)
+elif sel_top == "Congelador 2":
+    cajs = [f"Cajón {i}" for i in range(1, 7)]
+    subopc = st.selectbox("Cajón (1 Arriba,6 Abajo)", cajs)
+elif sel_top == "Frigorífico":
+    blds = [f"Balda {i}" for i in range(1, 8)] + ["Puerta"]
+    subopc = st.selectbox("Baldas (1 Arriba, 7 Abajo)", blds)
+elif sel_top == "Tª Ambiente":
+    com2 = st.text_input("Comentario (opt)")
+    subopc = com2.strip()
+if subopc:
+    sitio_new = f"{sel_top} - {subopc}"
 else:
-    sitio_almacenaje_nuevo = sitio_top
+    sitio_new = sel_top
 
 # NUEVA SECCIÓN: Si se ingresó Fecha Pedida, preguntar por el pedido del grupo completo.
 group_order_selected = None
-if pd.notna(fecha_pedida_nueva):
+if pd.notna(fped_new):
     group_id = df_for_style.at[row_index, "GroupID"]
     group_reactivos = df_for_style[df_for_style["GroupID"] == group_id]
     if not group_reactivos.empty:
@@ -509,51 +504,50 @@ if pd.notna(fecha_pedida_nueva):
         st.markdown('</div>', unsafe_allow_html=True)
 
 # -------------------------------------------------------------------------
-# Botón para Guardar Cambios (incluye actualización de Fecha Pedida para el grupo)
+# Botón para Guardar Cambios (actualiza fila y grupo)
 # -------------------------------------------------------------------------
 if st.button("Guardar Cambios"):
-    # Si se ingresó Fecha Llegada, forzamos Fecha Pedida a NaT (según la lógica original)
-    if pd.notna(fecha_llegada_nueva):
-        fecha_pedida_nueva = pd.NaT
+    # Si se ingresó Fecha Llegada, forzamos Fecha Pedida a NaT
+    if pd.notna(flleg_new):
+        fped_new = pd.NaT
 
     if "Stock" in df_main.columns:
-        if fecha_llegada_nueva != fecha_llegada_actual and pd.notna(fecha_llegada_nueva):
+        if flleg_new != fecha_llegada_actual and pd.notna(flleg_new):
             df_main.at[row_index, "Stock"] = stock_actual + uds_actual
-            st.info(f"Sumadas {uds_actual} uds al stock => {stock_actual + uds_actual}")
+            st.info(f"Añadidas {uds_actual} uds al stock => {stock_actual + uds_actual}")
 
     if "NºLote" in df_main.columns:
-        df_main.at[row_index, "NºLote"] = int(lote_actual) if lote_actual else 0
+        df_main.at[row_index, "NºLote"] = int(lote_new)  # Casting ya se hace aquí
     if "Caducidad" in df_main.columns:
-        df_main.at[row_index, "Caducidad"] = caducidad_nueva
+        df_main.at[row_index, "Caducidad"] = cad_new if pd.notna(cad_new) else pd.NaT
     if "Fecha Pedida" in df_main.columns:
-        df_main.at[row_index, "Fecha Pedida"] = fecha_pedida_nueva
+        df_main.at[row_index, "Fecha Pedida"] = fped_new
     if "Fecha Llegada" in df_main.columns:
-        df_main.at[row_index, "Fecha Llegada"] = fecha_llegada_nueva
+        df_main.at[row_index, "Fecha Llegada"] = flleg_new
     if "Sitio almacenaje" in df_main.columns:
-        df_main.at[row_index, "Sitio almacenaje"] = sitio_almacenaje_nuevo
+        df_main.at[row_index, "Sitio almacenaje"] = sitio_new
 
-    # Actualización en grupo: actualizar la "Fecha Pedida" para cada fila seleccionada en el multiselect.
-    if pd.notna(fecha_pedida_nueva) and group_order_selected:
+    # Actualización en grupo: actualizar "Fecha Pedida" para cada fila seleccionada en el multiselect.
+    if pd.notna(fped_new) and group_order_selected:
         for label in group_order_selected:
             try:
                 i_val = int(label.split(" - ")[0])
-                df_main.at[i_val, "Fecha Pedida"] = fecha_pedida_nueva
+                df_main.at[i_val, "Fecha Pedida"] = fped_new
             except Exception as e:
                 st.error(f"Error actualizando índice {label}: {e}")
 
     data_dict[sheet_name] = df_main
     new_file = crear_nueva_version_filename()
-
     with pd.ExcelWriter(new_file, engine="openpyxl") as writer:
         for sht, df_sht in data_dict.items():
-            cols_internos = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID"]
-            temp = df_sht.drop(columns=cols_internos, errors="ignore")
+            ocultar = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID"]
+            temp = df_sht.drop(columns=ocultar, errors="ignore")
             temp.to_excel(writer, sheet_name=sht, index=False)
 
     with pd.ExcelWriter(STOCK_FILE, engine="openpyxl") as writer:
         for sht, df_sht in data_dict.items():
-            cols_internos = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID"]
-            temp = df_sht.drop(columns=cols_internos, errors="ignore")
+            ocultar = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID"]
+            temp = df_sht.drop(columns=ocultar, errors="ignore")
             temp.to_excel(writer, sheet_name=sht, index=False)
 
     st.success(f"✅ Cambios guardados en '{new_file}' y '{STOCK_FILE}'.")
