@@ -80,7 +80,6 @@ def generar_excel_en_memoria(df_act: pd.DataFrame, sheet_nm="Hoja1"):
 # -------------------------------------------------------------------------
 # DICCIONARIO DE LOTES (definición de grupos)
 # -------------------------------------------------------------------------
-# Los títulos (claves) se definen para cada panel.
 LOTS_DATA = {
     "FOCUS": {
         "Panel Oncomine Focus Library Assay Chef Ready": [
@@ -203,6 +202,12 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # -------------------------------------------------------------------------
+# DEFINICIÓN GLOBAL DE LA HOJA A EDITAR (en la barra lateral)
+# -------------------------------------------------------------------------
+hojas_principales = list(data_dict.keys())
+sheet_name = st.sidebar.selectbox("Selecciona la hoja a editar:", hojas_principales, key="sheet_name")
+
+# -------------------------------------------------------------------------
 # CONTROL DE VERSIONES (INTOCABLE)
 # -------------------------------------------------------------------------
 with st.sidebar.expander("Ver / Gestionar versiones guardadas", expanded=False):
@@ -247,7 +252,6 @@ with st.sidebar.expander("Ver / Gestionar versiones guardadas", expanded=False):
 # -------------------------------------------------------------------------
 with st.expander("Recepción de lote completo", expanded=False):
     st.subheader("Confirmar recepción de lote")
-    # Mostrar los títulos de lote según LOTS_DATA del panel actual (sheet_name)
     if sheet_name in LOTS_DATA:
         lot_titles = list(LOTS_DATA[sheet_name].keys())
     else:
@@ -255,7 +259,6 @@ with st.expander("Recepción de lote completo", expanded=False):
     selected_lot = st.selectbox("Seleccione el título del lote", lot_titles, key="selected_lot")
     if selected_lot:
         df_current = enforce_types(data_dict[sheet_name])
-        # Mostrar una tabla con los nombres de los reactivos para identificar el lote
         st.write("Reactivos del lote:")
         st.dataframe(df_current[["Nombre producto", "Ref. Fisher"]])
         row_lot = df_current[df_current["Nombre producto"].str.lower() == selected_lot.lower()]
@@ -263,7 +266,7 @@ with st.expander("Recepción de lote completo", expanded=False):
             lot_ref = row_lot.iloc[0]["Ref. Saturno"]
             df_lote = df_current[df_current["Ref. Saturno"] == lot_ref].copy()
             st.write("Edite la información común del lote:")
-            # Para el sitio de almacenaje, replicamos el control de tipo y cajón
+            # Control de Tipo de Almacenaje y Cajón similar a la edición individual
             tipo_almacenaje = st.selectbox("Tipo de Almacenaje", ["Congelador 1", "Congelador 2", "Frigorífico", "Tª Ambiente"], key="tipo_recepcion")
             subopcion_recep = ""
             if tipo_almacenaje == "Congelador 1":
@@ -275,10 +278,7 @@ with st.expander("Recepción de lote completo", expanded=False):
             elif tipo_almacenaje == "Tª Ambiente":
                 subopcion_recep = st.text_input("Comentario (opcional)", key="coment_recep")
             sitio_recep = f"{tipo_almacenaje} - {subopcion_recep}" if subopcion_recep else tipo_almacenaje
-
-            # Edición directa de las columnas comunes del lote
             cols_edit = ["NºLote", "Fecha Llegada", "Caducidad", "Sitio almacenaje"]
-            # Actualizamos la columna Sitio almacenaje con el valor de recepción
             df_lote["Sitio almacenaje"] = sitio_recep
             df_edit = st.data_editor(df_lote[cols_edit], num_rows="dynamic", key="edicion_lote")
             if st.button("Guardar Recepción del Lote"):
