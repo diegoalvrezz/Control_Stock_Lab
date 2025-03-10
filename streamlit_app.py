@@ -7,14 +7,6 @@ import os
 from io import BytesIO
 import itertools
 
-# Inicializamos flags en session_state para controlar el borrado de fechas
-if "caducidad_cleared" not in st.session_state:
-    st.session_state.caducidad_cleared = False
-if "fp_cleared" not in st.session_state:
-    st.session_state.fp_cleared = False
-if "fl_cleared" not in st.session_state:
-    st.session_state.fl_cleared = False
-
 st.set_page_config(page_title="Control de Stock con Lotes", layout="centered")
 
 STOCK_FILE = "Stock_Original.xlsx"
@@ -292,9 +284,6 @@ with st.sidebar:
     with st.expander("⚠️ Alarmas", expanded=False):
         st.write("Col 'Alarma': '🔴' => Stock=0 y Fecha Pedida nula, '🟨' => Stock=0 y Fecha Pedida no nula.")
 
-    # --------------------------------------------------------------
-    # Reactivo Agotado (Consumido en Lab) - con guardado de versión
-    # --------------------------------------------------------------
     with st.expander("Reactivo Agotado (Consumido en Lab)", expanded=False):
         if data_dict:
             st.write("Selecciona hoja y reactivo para consumir stock y guardar versión.")
@@ -405,38 +394,29 @@ uds_actual = get_val("Uds.", 0)
 stock_actual = get_val("Stock", 0)
 
 # -------------------------------------------------------------------------
-# Inputs con "botón de borrado" (❌) para Caducidad, Fecha Pedida y Fecha Llegada
+# Inputs para Caducidad, Fecha Pedida y Fecha Llegada con opción "Sin fecha"
 # -------------------------------------------------------------------------
 
 # --- Caducidad ---
 st.write("**Caducidad**")
 col_cad1, col_cad2 = st.columns([3, 1])
 with col_cad1:
-    # Usamos hoy como fallback si no hay fecha previa
     caducidad_val = (
         caducidad_actual.date()
         if (pd.notna(caducidad_actual) and isinstance(caducidad_actual, pd.Timestamp))
         else datetime.date.today()
     )
-    caducidad_input = st.date_input(
-        label="",
-        value=caducidad_val,
-        key="caducidad_input"
-    )
+    caducidad_input = st.date_input("Seleccione la fecha", value=caducidad_val, key="caducidad_input")
 with col_cad2:
-    st.write("")
-    if st.button("❌ Borrar", key="btn_clear_caducidad"):
-        st.session_state.caducidad_cleared = True
-
-# Si se pulsó el botón "❌", guardamos NaT; si no, usamos el valor del date_input
-if st.session_state.get("caducidad_cleared", False):
+    sin_caducidad = st.checkbox("Sin caducidad", key="caducidad_checkbox")
+if sin_caducidad:
     caducidad_nueva = pd.NaT
 else:
     caducidad_nueva = pd.to_datetime(caducidad_input)
 
 # --- Fecha Pedida ---
 st.write("**Fecha Pedida**")
-col_fp1, col_fp2, col_fp3 = st.columns([1.5, 1.5, 1])
+col_fp1, col_fp2, col_fp3, col_fp4 = st.columns([1.5, 1.5, 1, 1])
 with col_fp1:
     fp_date_val = (
         fecha_pedida_actual.date()
@@ -451,21 +431,16 @@ with col_fp2:
         else datetime.time(0, 0)
     )
     fp_time_input = st.time_input("Hora", value=fp_time_val, key="fp_time_input")
-with col_fp3:
-    st.write("")
-    if st.button("❌ Borrar", key="btn_clear_fp"):
-        st.session_state.fp_cleared = True
-
-if st.session_state.get("fp_cleared", False):
+with col_fp4:
+    sin_fp = st.checkbox("Sin fecha pedida", key="fp_checkbox")
+if sin_fp:
     fecha_pedida_nueva = pd.NaT
 else:
-    fecha_pedida_nueva = None
-    if fp_date_input and fp_time_input:
-        fecha_pedida_nueva = pd.to_datetime(datetime.datetime.combine(fp_date_input, fp_time_input))
+    fecha_pedida_nueva = pd.to_datetime(datetime.datetime.combine(fp_date_input, fp_time_input))
 
 # --- Fecha Llegada ---
 st.write("**Fecha Llegada**")
-col_fl1, col_fl2, col_fl3 = st.columns([1.5, 1.5, 1])
+col_fl1, col_fl2, col_fl3, col_fl4 = st.columns([1.5, 1.5, 1, 1])
 with col_fl1:
     fl_date_val = (
         fecha_llegada_actual.date()
@@ -480,22 +455,14 @@ with col_fl2:
         else datetime.time(0, 0)
     )
     fl_time_input = st.time_input("Hora", value=fl_time_val, key="fl_time_input")
-with col_fl3:
-    st.write("")
-    if st.button("❌ Borrar", key="btn_clear_fl"):
-        st.session_state.fl_cleared = True
-
-if st.session_state.get("fl_cleared", False):
+with col_fl4:
+    sin_fl = st.checkbox("Sin fecha llegada", key="fl_checkbox")
+if sin_fl:
     fecha_llegada_nueva = pd.NaT
 else:
-    fecha_llegada_nueva = None
-    if fl_date_input and fl_time_input:
-        fecha_llegada_nueva = pd.to_datetime(datetime.datetime.combine(fl_date_input, fl_time_input))
+    fecha_llegada_nueva = pd.to_datetime(datetime.datetime.combine(fl_date_input, fl_time_input))
 
-# Botón opcional de refrescar
-if st.button("Refrescar Página"):
-    st.rerun()
-
+# Sección adicional para Sitio de Almacenaje
 st.write("Sitio de Almacenaje")
 opciones_sitio = ["Congelador 1", "Congelador 2", "Frigorífico", "Tª Ambiente"]
 sitio_principal = sitio_almacenaje_actual.split(" - ")[0] if " - " in sitio_almacenaje_actual else sitio_almacenaje_actual
@@ -544,19 +511,17 @@ if pd.notna(fecha_pedida_nueva):
 # Botón para Guardar Cambios (incluye actualización de Fecha Pedida para el grupo)
 # -------------------------------------------------------------------------
 if st.button("Guardar Cambios"):
-    # Si se ingresó Fecha Llegada, forzamos Fecha Pedida a NaT
+    # Si se ingresó Fecha Llegada, forzamos Fecha Pedida a NaT (según la lógica original)
     if pd.notna(fecha_llegada_nueva):
         fecha_pedida_nueva = pd.NaT
 
     if "Stock" in df_main.columns:
-        # Si antes no había fecha de llegada y ahora sí, sumamos al stock
         if fecha_llegada_nueva != fecha_llegada_actual and pd.notna(fecha_llegada_nueva):
             df_main.at[row_index, "Stock"] = stock_actual + uds_actual
             st.info(f"Sumadas {uds_actual} uds al stock => {stock_actual + uds_actual}")
 
-    # Guardar en df_main
     if "NºLote" in df_main.columns:
-        df_main.at[row_index, "NºLote"] = int(lote_nuevo)
+        df_main.at[row_index, "NºLote"] = int(lote_actual) if lote_actual else 0
     if "Caducidad" in df_main.columns:
         df_main.at[row_index, "Caducidad"] = caducidad_nueva
     if "Fecha Pedida" in df_main.columns:
@@ -575,7 +540,6 @@ if st.button("Guardar Cambios"):
             except Exception as e:
                 st.error(f"Error actualizando índice {label}: {e}")
 
-    # Se actualiza data_dict y se guarda versión
     data_dict[sheet_name] = df_main
     new_file = crear_nueva_version_filename()
 
@@ -599,10 +563,4 @@ if st.button("Guardar Cambios"):
         file_name="Reporte_Stock.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-
-    # Reseteamos los flags de borrado tras guardar
-    st.session_state.caducidad_cleared = False
-    st.session_state.fp_cleared = False
-    st.session_state.fl_cleared = False
-
     st.rerun()
