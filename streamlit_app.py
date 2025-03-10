@@ -128,8 +128,7 @@ LOTS_DATA = {
     }
 }
 
-# Para agrupar por reactivo, usaremos la "Ref. Saturno"
-# Lista de paneles (para filtrar)
+# Para agrupar por reactivo usaremos la "Ref. Saturno".
 panel_order = ["FOCUS", "OCA", "OCA PLUS"]
 
 # Paleta de colores para asignar a cada grupo
@@ -166,9 +165,6 @@ def build_group_info_by_ref(df: pd.DataFrame, panel_default=None):
         group_color_mapping[gid] = next(color_cycle_local)
     df["ColorGroup"] = df["GroupID"].apply(lambda x: group_color_mapping.get(x, "#FFFFFF"))
     
-    # Determinar EsTitulo: si dentro del grupo hay algún "Nombre producto" que coincida
-    # con alguno de los títulos definidos en LOTS_DATA para el panel actual, se marca.
-    # Sino, se marca la primera fila del grupo.
     group_titles = []
     if panel_default in LOTS_DATA:
         group_titles = [t.strip().lower() for t in LOTS_DATA[panel_default].keys()]
@@ -208,7 +204,7 @@ def style_lote(row):
     return styles
 
 # -------------------------------------------------------------------------
-# Inyectar algo de CSS para agrandar el multiselect (visualización de reactivos a pedir)
+# Inyectar CSS para agrandar el multiselect
 st.markdown("""
     <style>
     .big-select select {
@@ -449,18 +445,17 @@ else:
 # NUEVA SECCIÓN: Si se ingresó Fecha Pedida, preguntar por el pedido del grupo completo.
 group_order_selected = None
 if pd.notna(fecha_pedida_nueva):
-    # Recalcular agrupación completa de la hoja (por Ref. Saturno)
     df_grouped = build_group_info_by_ref(enforce_types(data_dict[sheet_name]), panel_default=sheet_name)
     group_id = df_for_style.at[row_index, "GroupID"]
     group_reactivos = df_grouped[df_grouped["GroupID"] == group_id]
     if not group_reactivos.empty:
-        # Usar el nombre del título (fila con EsTitulo==True) si existe; sino, usar "Ref. Saturno: <group_id>"
         if group_reactivos["EsTitulo"].any():
             lot_name = group_reactivos[group_reactivos["EsTitulo"]==True]["Nombre producto"].iloc[0]
         else:
             lot_name = f"Ref. Saturno {group_id}"
-        options = group_reactivos.apply(lambda r: f"{r['Nombre producto']} ({r['Ref. Fisher']})", axis=1).tolist()
-        # Envolver el multiselect en un div para aplicar el CSS de "big-select"
+        # Generar opciones con el índice incluido para facilitar la actualización
+        group_reactivos_reset = group_reactivos.reset_index()
+        options = group_reactivos_reset.apply(lambda r: f"{r['index']} - {r['Nombre producto']} ({r['Ref. Fisher']})", axis=1).tolist()
         st.markdown('<div class="big-select">', unsafe_allow_html=True)
         group_order_selected = st.multiselect(f"¿Quieres pedir también los siguientes reactivos del lote **{lot_name}**?", options, default=options)
         st.markdown('</div>', unsafe_allow_html=True)
@@ -469,7 +464,6 @@ if pd.notna(fecha_pedida_nueva):
 # Botón para Guardar Cambios (incluye actualización de Fecha Pedida para el grupo)
 # -------------------------------------------------------------------------
 if st.button("Guardar Cambios"):
-    # Si se ingresó fecha de llegada, se borra la fecha pedida
     if pd.notna(fecha_llegada_nueva):
         fecha_pedida_nueva = pd.NaT
 
@@ -499,17 +493,18 @@ if st.button("Guardar Cambios"):
         df_main.at[row_index, "Sitio almacenaje"] = sitio_almacenaje_nuevo
 
     # Actualización en grupo:
-    # Si se ingresó Fecha Pedida y se seleccionaron reactivos del mismo grupo, se asigna la misma Fecha Pedida.
     if pd.notna(fecha_pedida_nueva) and group_order_selected:
-        df_sheet = data_dict[sheet_name]
-        for idx, row in df_sheet.iterrows():
-            label = f"{row['Nombre producto']} ({row['Ref. Fisher']})"
-            if label in group_order_selected:
-                df_sheet.at[idx, "Fecha Pedida"] = fecha_pedida_nueva
+        # Iteramos sobre los elementos seleccionados en el multiselect.
+        # Cada opción tiene el formato "índice - Nombre producto (Ref. Fisher)"
+        for label in group_order_selected:
+            try:
+                i_val = int(label.split(" - ")[0])
+                data_dict[sheet_name].at[i_val, "Fecha Pedida"] = fecha_pedida_nueva
+            except:
+                pass
 
     data_dict[sheet_name] = df_main
 
-    # Guardar cambios: generar nueva versión y actualizar el archivo principal
     new_file = crear_nueva_version_filename()
     with pd.ExcelWriter(new_file, engine="openpyxl") as writer:
         for sht, df_sht in data_dict.items():
