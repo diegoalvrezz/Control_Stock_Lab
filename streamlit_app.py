@@ -83,129 +83,106 @@ def generar_excel_en_memoria(df_act: pd.DataFrame, sheet_nm="Hoja1"):
 # -------------------------------------------------------------------------
 # DICCIONARIO DE LOTES (definición de grupos)
 # -------------------------------------------------------------------------
+# Los títulos (claves) siguen siendo definidos para cada panel
 LOTS_DATA = {
     "FOCUS": {
-        # 1) Panel Oncomine Focus Library Assay Chef Ready
         "Panel Oncomine Focus Library Assay Chef Ready": [
             "Primers DNA", "Primers RNA", "Reagents DL8", "Chef supplies (plásticos)", "Placas", "Solutions DL8"
         ],
-        # 2) Ion 510/520/530 kit-Chef (TEMPLADO)
         "Ion 510/520/530 kit-Chef (TEMPLADO)": [
             "Chef Reagents", "Chef Solutions", "Chef supplies (plásticos)", "Solutions Reagent S5", "Botellas S5"
         ],
-        # 3) Recover All TM Multi-Sample RNA/DNA Isolation workflow-Kit
         "Recover All TM Multi-Sample RNA/DNA Isolation workflow-Kit": [
             "Kit extracción DNA/RNA", "RecoverAll TM kit (Dnase, protease,…)", "H2O RNA free",
             "Tubos fondo cónico", "Superscript VILO cDNA Syntheis Kit", "Qubit 1x dsDNA HS Assay kit (100 reactions)"
         ],
-        # 4) (Nuevo) Chip secuenciación liberación de protones 6 millones de lecturas
         "Chip secuenciación liberación de protones 6 millones de lecturas": []
     },
     "OCA": {
-        # 1) Panel OCA Library Assay Chef Ready
         "Panel OCA Library Assay Chef Ready": [
             "Primers DNA", "Primers RNA", "Reagents DL8", "Chef supplies (plásticos)", "Placas", "Solutions DL8"
         ],
-        # 2) kit-Chef (TEMPLADO)
         "kit-Chef (TEMPLADO)": [
             "Ion 540 TM Chef Reagents", "Chef Solutions", "Chef supplies (plásticos)",
             "Solutions Reagent S5", "Botellas S5"
         ],
-        # 3) Chip secuenciación liberación de protones 6 millones de lecturas
         "Chip secuenciación liberación de protones 6 millones de lecturas": [
             "Ion 540 TM Chip Kit"
         ],
-        # 4) Recover All TM Multi-Sample RNA/DNA Isolation workflow-Kit
         "Recover All TM Multi-Sample RNA/DNA Isolation workflow-Kit": [
             "Kit extracción DNA/RNA", "RecoverAll TM kit (Dnase, protease,…)", "H2O RNA free", "Tubos fondo cónico"
         ]
     },
     "OCA PLUS": {
-        # 1) Panel OCA-PLUS Library Assay Chef Ready
         "Panel OCA-PLUS Library Assay Chef Ready": [
             "Primers DNA", "Uracil-DNA Glycosylase heat-labile", "Reagents DL8",
             "Chef supplies (plásticos)", "Placas", "Solutions DL8"
         ],
-        # 2) kit-Chef (TEMPLADO)
         "kit-Chef (TEMPLADO)": [
             "Ion 550 TM Chef Reagents", "Chef Solutions", "Chef Supplies (plásticos)",
             "Solutions Reagent S5", "Botellas S5", "Chip secuenciación Ion 550 TM Chip Kit"
         ],
-        # 3) Recover All TM Multi-Sample RNA/DNA Isolation workflow-Kit
         "Recover All TM Multi-Sample RNA/DNA Isolation workflow-Kit": [
             "Kit extracción DNA/RNA", "RecoverAll TM kit (Dnase, protease,…)", "H2O RNA free", "Tubos fondo cónico"
         ]
     }
 }
 
-# Lista de paneles (para poder filtrar en find_sub_lot)
+# Lista de paneles (para filtrar)
 panel_order = ["FOCUS", "OCA", "OCA PLUS"]
 
-# Paleta de colores a usar (se usa el ciclo para asignar a cada grupo)
+# Paleta de colores para asignar a cada grupo
 colors = [
     "#FED7D7", "#FEE2E2", "#FFEDD5", "#FEF9C3", "#D9F99D",
     "#CFFAFE", "#E0E7FF", "#FBCFE8", "#F9A8D4", "#E9D5FF",
     "#FFD700", "#F0FFF0", "#D1FAE5", "#BAFEE2", "#A7F3D0", "#FFEC99"
 ]
 
-# ----------------- Función de búsqueda de grupo -----------------
-def find_sub_lot(nombre_prod: str):
+# ----------------- NUEVA FUNCIÓN: Agrupar por Ref. Saturno -----------------
+def build_group_info_by_ref(df: pd.DataFrame, panel_default=None):
     """
-    Devuelve (panel, sublote, esPrincipal) si se encuentra una coincidencia,
-    comparando en minúsculas. Se busca si el nombre coincide exactamente con el
-    título del grupo o con alguno de sus reactivos.
-    """
-    nombre_prod_clean = str(nombre_prod).strip().lower()
-    for p in panel_order:
-        subdict = LOTS_DATA.get(p, {})
-        for sublote_name, reactivos in subdict.items():
-            if nombre_prod_clean == sublote_name.strip().lower():
-                return (p, sublote_name, True)
-            for reactivo in reactivos:
-                if nombre_prod_clean == reactivo.strip().lower():
-                    return (p, sublote_name, False)
-    return None
-
-# ----------------- Función de agrupación y ordenamiento -----------------
-def build_group_info(df: pd.DataFrame, panel_default=None):
-    """
-    Crea las columnas:
-      - GroupTitle: título del grupo según LOTS_DATA (o "Sin Grupo" si no hay match)
-      - EsTitulo: True si el registro coincide con el título (para poner en negrita)
-      - ColorGroup: color asignado a ese grupo
-      - GroupCount: cantidad de registros en ese grupo
-      - MultiSort: 0 si el grupo tiene más de 1 integrante, 1 si es solitario
-      - NotTitulo: 0 para filas título, 1 para el resto (para forzar que el título vaya primero)
+    Agrupa los registros por el valor de "Ref. Saturno".
+    Para cada grupo:
+      - Se asigna la misma "GroupID" (igual a "Ref. Saturno").
+      - Se calcula el tamaño del grupo (GroupCount).
+      - Se asigna un color único.
+      - Se determina la fila título (EsTitulo): si alguno de los reactivos
+        coincide (sin distinguir mayúsculas) con algún título definido en LOTS_DATA
+        para el panel actual, se marca; si no, se marca la primera fila del grupo.
+      - Se definen MultiSort (0 para grupos con >1 integrante, 1 para solitarios)
+        y NotTitulo (0 para la fila título, 1 para el resto).
     """
     df = df.copy()
-    df["GroupTitle"] = None
-    df["EsTitulo"] = False
-    for i, row in df.iterrows():
-        nombre = str(row.get("Nombre producto", "")).strip()
-        info = find_sub_lot(nombre)
-        # Si se encontró y coincide con el panel (o se ignora panel_default si es None)
-        if info is not None and (panel_default is None or info[0] == panel_default):
-            panel, group_title, is_main = info
-            df.at[i, "GroupTitle"] = group_title
-            df.at[i, "EsTitulo"] = is_main
-        else:
-            df.at[i, "GroupTitle"] = "Sin Grupo"
-            df.at[i, "EsTitulo"] = False
-
-    # Asignar un color único a cada grupo
-    unique_groups = sorted(df["GroupTitle"].unique())
+    # Grupo según "Ref. Saturno"
+    df["GroupID"] = df["Ref. Saturno"]
+    group_sizes = df.groupby("GroupID").size().to_dict()
+    df["GroupCount"] = df["GroupID"].apply(lambda x: group_sizes.get(x, 0))
+    
+    # Asignar color: cada valor único de GroupID tendrá un color
+    unique_ids = sorted(df["GroupID"].unique())
     group_color_mapping = {}
     color_cycle_local = itertools.cycle(colors)
-    for group in unique_groups:
-        group_color_mapping[group] = next(color_cycle_local)
-    df["ColorGroup"] = df["GroupTitle"].apply(lambda x: group_color_mapping.get(x, "#FFFFFF"))
+    for gid in unique_ids:
+        group_color_mapping[gid] = next(color_cycle_local)
+    df["ColorGroup"] = df["GroupID"].apply(lambda x: group_color_mapping.get(x, "#FFFFFF"))
+    
+    # Determinar EsTitulo: si en el grupo hay algún reactivo cuyo "Nombre producto" coincida
+    # con alguno de los títulos definidos en LOTS_DATA para panel_default, se marca; de lo contrario,
+    # se marca la primera fila del grupo.
+    group_titles = []
+    if panel_default in LOTS_DATA:
+        group_titles = [t.strip().lower() for t in LOTS_DATA[panel_default].keys()]
+    df["EsTitulo"] = False
+    for gid, group_df in df.groupby("GroupID"):
+        mask = group_df["Nombre producto"].str.strip().str.lower().isin(group_titles)
+        if mask.any():
+            idxs = group_df[mask].index
+            df.loc[idxs, "EsTitulo"] = True
+        else:
+            first_idx = group_df.index[0]
+            df.at[first_idx, "EsTitulo"] = True
 
-    # Contar integrantes por grupo
-    group_sizes = df.groupby("GroupTitle").size().to_dict()
-    df["GroupCount"] = df["GroupTitle"].apply(lambda x: group_sizes.get(x, 0))
-    # MultiSort: 0 para grupos con más de 1 integrante, 1 para solitarios
     df["MultiSort"] = df["GroupCount"].apply(lambda x: 0 if x > 1 else 1)
-    # NotTitulo: 0 para fila título (para que aparezca primero), 1 para el resto
     df["NotTitulo"] = df["EsTitulo"].apply(lambda x: 0 if x else 1)
     return df
 
@@ -341,7 +318,7 @@ with st.sidebar:
 # -------------------------------------------------------------------------
 # CUERPO PRINCIPAL
 # -------------------------------------------------------------------------
-st.title("📦 Control de Stock: Agrupación por Grupos (Título en Negrita y Orden Personalizado)")
+st.title("📦 Control de Stock: Agrupación por Ref. Saturno y Pedido del Lote Completo")
 
 if not data_dict:
     st.error("No se pudo cargar la base de datos.")
@@ -355,20 +332,20 @@ sheet_name = st.selectbox("Selecciona la hoja a editar:", hojas_principales, key
 df_main_original = data_dict[sheet_name].copy()
 df_main_original = enforce_types(df_main_original)
 
-# 1) Creamos df para estilo: calculamos alarma y agrupamos según LOTS_DATA para el panel actual.
+# 1) Creamos df para estilo: calculamos alarma y agrupamos por Ref. Saturno
 df_for_style = df_main_original.copy()
 df_for_style["Alarma"] = df_for_style.apply(calc_alarma, axis=1)
-df_for_style = build_group_info(df_for_style, panel_default=sheet_name)
+df_for_style = build_group_info_by_ref(df_for_style, panel_default=sheet_name)
 
-# 2) Ordenamos: primero los grupos con más de 1 integrante y dentro de ellos el título (EsTitulo=True) al principio; después los solitarios.
-df_for_style.sort_values(by=["MultiSort", "GroupTitle", "NotTitulo"], inplace=True)
+# 2) Ordenamos: primero los grupos con más de 1 integrante y dentro de ellos la fila título (EsTitulo=True) al inicio; luego los solitarios.
+df_for_style.sort_values(by=["MultiSort", "GroupID", "NotTitulo"], inplace=True)
 df_for_style.reset_index(drop=True, inplace=True)
 
 styled_df = df_for_style.style.apply(style_lote, axis=1)
 
 # Columnas internas a ocultar
 all_cols = df_for_style.columns.tolist()
-cols_to_hide = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupTitle"]
+cols_to_hide = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID"]
 final_cols = [c for c in all_cols if c not in cols_to_hide]
 
 table_html = styled_df.to_html(columns=final_cols)
@@ -400,27 +377,24 @@ sitio_almacenaje_actual = get_val("Sitio almacenaje", "")
 uds_actual = get_val("Uds.", 0)
 stock_actual = get_val("Stock", 0)
 
-colA, colB, colC, colD = st.columns([1, 1, 1, 1])
+colA, colB, colC, colD = st.columns([1,1,1,1])
 with colA:
     lote_nuevo = st.number_input("Nº de Lote", value=int(lote_actual), step=1)
     caducidad_nueva = st.date_input("Caducidad", value=caducidad_actual if pd.notna(caducidad_actual) else None)
-
 with colB:
     fp_date = st.date_input("Fecha Pedida (fecha)",
                             value=fecha_pedida_actual.date() if pd.notna(fecha_pedida_actual) else None,
                             key="fp_date_main")
     fp_time = st.time_input("Hora Pedida",
-                            value=fecha_pedida_actual.time() if pd.notna(fecha_pedida_actual) else datetime.time(0, 0),
+                            value=fecha_pedida_actual.time() if pd.notna(fecha_pedida_actual) else datetime.time(0,0),
                             key="fp_time_main")
-
 with colC:
     fl_date = st.date_input("Fecha Llegada (fecha)",
                             value=fecha_llegada_actual.date() if pd.notna(fecha_llegada_actual) else None,
                             key="fl_date_main")
     fl_time = st.time_input("Hora Llegada",
-                            value=fecha_llegada_actual.time() if pd.notna(fecha_llegada_actual) else datetime.time(0, 0),
+                            value=fecha_llegada_actual.time() if pd.notna(fecha_llegada_actual) else datetime.time(0,0),
                             key="fl_time_main")
-
 with colD:
     st.write("")
     st.write("")
@@ -432,7 +406,6 @@ fecha_pedida_nueva = None
 if fp_date is not None:
     dt_ped = datetime.datetime.combine(fp_date, fp_time)
     fecha_pedida_nueva = pd.to_datetime(dt_ped)
-
 fecha_llegada_nueva = None
 if fl_date is not None:
     dt_lleg = datetime.datetime.combine(fl_date, fl_time)
@@ -444,28 +417,45 @@ sitio_principal = sitio_almacenaje_actual.split(" - ")[0] if " - " in sitio_alma
 if sitio_principal not in opciones_sitio:
     sitio_principal = opciones_sitio[0]
 sitio_top = st.selectbox("Tipo Almacenaje", opciones_sitio, index=opciones_sitio.index(sitio_principal))
-
 subopcion = ""
 if sitio_top == "Congelador 1":
-    cajones = [f"Cajón {i}" for i in range(1, 9)]
+    cajones = [f"Cajón {i}" for i in range(1,9)]
     subopcion = st.selectbox("Cajón (1 Arriba,8 Abajo)", cajones)
 elif sitio_top == "Congelador 2":
-    cajones = [f"Cajón {i}" for i in range(1, 7)]
+    cajones = [f"Cajón {i}" for i in range(1,7)]
     subopcion = st.selectbox("Cajón (1 Arriba,6 Abajo)", cajones)
 elif sitio_top == "Frigorífico":
-    baldas = [f"Balda {i}" for i in range(1, 8)] + ["Puerta"]
+    baldas = [f"Balda {i}" for i in range(1,8)] + ["Puerta"]
     subopcion = st.selectbox("Baldas (1 Arriba, 7 Abajo)", baldas)
 elif sitio_top == "Tª Ambiente":
     comentario = st.text_input("Comentario (opcional)")
     subopcion = comentario.strip()
-
 if subopcion:
     sitio_almacenaje_nuevo = f"{sitio_top} - {subopcion}"
 else:
     sitio_almacenaje_nuevo = sitio_top
 
+# NUEVA SECCIÓN: Si se ingresó Fecha Pedida, preguntar por el pedido del grupo completo
+group_order_selected = None
+if pd.notna(fecha_pedida_nueva):
+    # Recalcular agrupación completa de la hoja (por Ref. Saturno)
+    df_grouped = build_group_info_by_ref(enforce_types(data_dict[sheet_name]), panel_default=sheet_name)
+    group_id = df_for_style.at[row_index, "GroupID"]
+    group_reactivos = df_grouped[df_grouped["GroupID"] == group_id]
+    if not group_reactivos.empty:
+        # Usar el nombre del título (fila con EsTitulo=True) si existe; sino, usar "Ref. Saturno: <group_id>"
+        if group_reactivos["EsTitulo"].any():
+            lot_name = group_reactivos[group_reactivos["EsTitulo"]==True]["Nombre producto"].iloc[0]
+        else:
+            lot_name = f"Ref. Saturno {group_id}"
+        options = group_reactivos.apply(lambda r: f"{r['Nombre producto']} ({r['Ref. Fisher']})", axis=1).tolist()
+        group_order_selected = st.multiselect(f"¿Quieres pedir también los siguientes reactivos del lote **{lot_name}**?", options, default=options)
+
+# -------------------------------------------------------------------------
+# Botón para Guardar Cambios (incluye actualización de Fecha Pedida para el grupo)
+# -------------------------------------------------------------------------
 if st.button("Guardar Cambios"):
-    # Si llega => borramos pedida
+    # Si se ingresó fecha de llegada, se borra la fecha pedida
     if pd.notna(fecha_llegada_nueva):
         fecha_pedida_nueva = pd.NaT
 
@@ -474,52 +464,51 @@ if st.button("Guardar Cambios"):
             df_main.at[row_index, "Stock"] = stock_actual + uds_actual
             st.info(f"Sumadas {uds_actual} uds al stock => {stock_actual + uds_actual}")
 
-    # Casting para evitar FutureWarning
     if "NºLote" in df_main.columns:
         df_main.at[row_index, "NºLote"] = int(lote_nuevo)
-
     if "Caducidad" in df_main.columns:
         if pd.notna(caducidad_nueva):
             df_main.at[row_index, "Caducidad"] = pd.to_datetime(caducidad_nueva)
         else:
             df_main.at[row_index, "Caducidad"] = pd.NaT
-
     if "Fecha Pedida" in df_main.columns:
         if pd.notna(fecha_pedida_nueva):
             df_main.at[row_index, "Fecha Pedida"] = pd.to_datetime(fecha_pedida_nueva)
         else:
             df_main.at[row_index, "Fecha Pedida"] = pd.NaT
-
     if "Fecha Llegada" in df_main.columns:
         if pd.notna(fecha_llegada_nueva):
             df_main.at[row_index, "Fecha Llegada"] = pd.to_datetime(fecha_llegada_nueva)
         else:
             df_main.at[row_index, "Fecha Llegada"] = pd.NaT
-
     if "Sitio almacenaje" in df_main.columns:
         df_main.at[row_index, "Sitio almacenaje"] = sitio_almacenaje_nuevo
 
-    # Guardamos df_main en data_dict
+    # Actualización en grupo: si se ingresó Fecha Pedida y se seleccionaron reactivos del mismo grupo,
+    # se asigna la misma Fecha Pedida a esos registros.
+    if pd.notna(fecha_pedida_nueva) and group_order_selected:
+        df_sheet = data_dict[sheet_name]
+        for idx, row in df_sheet.iterrows():
+            label = f"{row['Nombre producto']} ({row['Ref. Fisher']})"
+            if label in group_order_selected:
+                df_sheet.at[idx, "Fecha Pedida"] = fecha_pedida_nueva
+
     data_dict[sheet_name] = df_main
 
-    # Al generar Excel, eliminamos las columnas internas
+    # Guardar cambios: se genera una nueva versión y se actualiza el archivo principal
     new_file = crear_nueva_version_filename()
     with pd.ExcelWriter(new_file, engine="openpyxl") as writer:
         for sht, df_sht in data_dict.items():
-            # Eliminamos columnas internas si existen
-            cols_internos = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupTitle"]
+            cols_internos = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID"]
             temp = df_sht.drop(columns=cols_internos, errors="ignore")
             temp.to_excel(writer, sheet_name=sht, index=False)
-
     with pd.ExcelWriter(STOCK_FILE, engine="openpyxl") as writer:
         for sht, df_sht in data_dict.items():
-            cols_internos = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupTitle"]
+            cols_internos = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID"]
             temp = df_sht.drop(columns=cols_internos, errors="ignore")
             temp.to_excel(writer, sheet_name=sht, index=False)
 
     st.success(f"✅ Cambios guardados en '{new_file}' y '{STOCK_FILE}'.")
-
-    # Generamos Excel en memoria de la hoja actual
     excel_bytes = generar_excel_en_memoria(df_main, sheet_nm=sheet_name)
     st.download_button(
         label="Descargar Excel modificado",
