@@ -83,7 +83,7 @@ def generar_excel_en_memoria(df_act: pd.DataFrame, sheet_nm="Hoja1"):
 # -------------------------------------------------------------------------
 # DICCIONARIO DE LOTES (definición de grupos)
 # -------------------------------------------------------------------------
-# Los títulos (claves) siguen siendo definidos para cada panel.
+# Los títulos (claves) se definen para cada panel.
 LOTS_DATA = {
     "FOCUS": {
         "Panel Oncomine Focus Library Assay Chef Ready": [
@@ -128,7 +128,7 @@ LOTS_DATA = {
     }
 }
 
-# Para agrupar por reactivo usaremos la "Ref. Saturno".
+# Para agrupar usaremos "Ref. Saturno"
 panel_order = ["FOCUS", "OCA", "OCA PLUS"]
 
 # Paleta de colores para asignar a cada grupo
@@ -141,17 +141,14 @@ colors = [
 # ----------------- Agrupar por Ref. Saturno -----------------
 def build_group_info_by_ref(df: pd.DataFrame, panel_default=None):
     """
-    Agrupa los registros según el valor de "Ref. Saturno".
-    Asigna:
-      - GroupID igual a "Ref. Saturno".
-      - GroupCount: tamaño del grupo.
-      - ColorGroup: color asignado a ese grupo.
-      - EsTitulo: determina la fila título.
-        Se intenta marcar como título la fila cuyo "Nombre producto" coincida con
-        alguno de los títulos definidos en LOTS_DATA para el panel actual.
-        Si no se encuentra, se marca la primera fila del grupo.
-      - MultiSort: 0 para grupos con >1 integrante, 1 para solitarios.
-      - NotTitulo: 0 para la fila título, 1 para el resto.
+    Agrupa los registros según "Ref. Saturno" y asigna:
+      - GroupID igual a "Ref. Saturno"
+      - GroupCount: tamaño del grupo
+      - ColorGroup: color asignado a ese grupo
+      - EsTitulo: se marca como título la fila cuyo "Nombre producto" coincida con
+        alguno de los títulos definidos en LOTS_DATA para el panel; si no se encuentra,
+        se marca la primera fila del grupo.
+      - MultiSort y NotTitulo para ordenar.
     """
     df = df.copy()
     df["GroupID"] = df["Ref. Saturno"]
@@ -344,7 +341,7 @@ df_for_style = df_main_original.copy()
 df_for_style["Alarma"] = df_for_style.apply(calc_alarma, axis=1)
 df_for_style = build_group_info_by_ref(df_for_style, panel_default=sheet_name)
 
-# 2) Ordenamos: primero los grupos con más de 1 integrante y dentro de ellos la fila título (EsTitulo=True) al inicio; luego los solitarios.
+# 2) Ordenamos: primero los grupos con >1 integrante y dentro de ellos la fila título (EsTitulo=True) al inicio; luego los solitarios.
 df_for_style.sort_values(by=["MultiSort", "GroupID", "NotTitulo"], inplace=True)
 df_for_style.reset_index(drop=True, inplace=True)
 
@@ -445,15 +442,14 @@ else:
 # NUEVA SECCIÓN: Si se ingresó Fecha Pedida, preguntar por el pedido del grupo completo.
 group_order_selected = None
 if pd.notna(fecha_pedida_nueva):
-    df_grouped = build_group_info_by_ref(enforce_types(data_dict[sheet_name]), panel_default=sheet_name)
+    # Usamos df_for_style (ya ordenado y con índice reiniciado)
     group_id = df_for_style.at[row_index, "GroupID"]
-    group_reactivos = df_grouped[df_grouped["GroupID"] == group_id]
+    group_reactivos = df_for_style[df_for_style["GroupID"] == group_id]
     if not group_reactivos.empty:
         if group_reactivos["EsTitulo"].any():
             lot_name = group_reactivos[group_reactivos["EsTitulo"]==True]["Nombre producto"].iloc[0]
         else:
             lot_name = f"Ref. Saturno {group_id}"
-        # Generar opciones con el índice incluido para facilitar la actualización
         group_reactivos_reset = group_reactivos.reset_index()
         options = group_reactivos_reset.apply(lambda r: f"{r['index']} - {r['Nombre producto']} ({r['Ref. Fisher']})", axis=1).tolist()
         st.markdown('<div class="big-select">', unsafe_allow_html=True)
@@ -492,16 +488,14 @@ if st.button("Guardar Cambios"):
     if "Sitio almacenaje" in df_main.columns:
         df_main.at[row_index, "Sitio almacenaje"] = sitio_almacenaje_nuevo
 
-    # Actualización en grupo:
+    # Actualización en grupo: actualizar la "Fecha Pedida" para cada fila seleccionada en el multiselect.
     if pd.notna(fecha_pedida_nueva) and group_order_selected:
-        # Iteramos sobre los elementos seleccionados en el multiselect.
-        # Cada opción tiene el formato "índice - Nombre producto (Ref. Fisher)"
         for label in group_order_selected:
             try:
                 i_val = int(label.split(" - ")[0])
-                data_dict[sheet_name].at[i_val, "Fecha Pedida"] = fecha_pedida_nueva
-            except:
-                pass
+                df_main.at[i_val, "Fecha Pedida"] = fecha_pedida_nueva
+            except Exception as e:
+                st.error(f"Error actualizando índice {label}: {e}")
 
     data_dict[sheet_name] = df_main
 
