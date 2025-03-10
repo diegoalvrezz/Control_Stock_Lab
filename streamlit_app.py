@@ -38,7 +38,8 @@ authenticator = stauth.Authenticate(
     cookie_expiry_days=1
 )
 
-name, authentication_status, username = authenticator.login("Inicia sesión", "main")
+name, authentication_status, username = authenticator.login("Inicia sesión", location="main")
+
 
 if authentication_status:
     st.success(f"Bienvenido, {name}!")
