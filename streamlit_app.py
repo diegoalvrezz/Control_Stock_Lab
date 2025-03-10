@@ -56,14 +56,11 @@ def enforce_types(df: pd.DataFrame):
         df["Uds."] = pd.to_numeric(df["Uds."], errors="coerce").fillna(0).astype(int)
     if "NºLote" in df.columns:
         df["NºLote"] = pd.to_numeric(df["NºLote"], errors="coerce").fillna(0).astype(int)
-
     for col in ["Caducidad", "Fecha Pedida", "Fecha Llegada"]:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce")
-
     if "Sitio almacenaje" in df.columns:
         df["Sitio almacenaje"] = df["Sitio almacenaje"].astype(str)
-
     if "Stock" in df.columns:
         df["Stock"] = pd.to_numeric(df["Stock"], errors="coerce").fillna(0).astype(int)
     return df
@@ -215,82 +212,22 @@ st.markdown("""
 # BARRA LATERAL
 # -------------------------------------------------------------------------
 with st.sidebar:
-    with st.expander("🔎 Ver / Gestionar versiones guardadas", expanded=False):
-        if data_dict:
-            files = sorted(os.listdir(VERSIONS_DIR))
-            versions_no_original = [f for f in files if f != "Stock_Original.xlsx"]
-            if versions_no_original:
-                version_sel = st.selectbox("Selecciona versión:", versions_no_original)
-                confirm_delete = False
-
-                if version_sel:
-                    file_path = os.path.join(VERSIONS_DIR, version_sel)
-                    if os.path.isfile(file_path):
-                        with open(file_path, "rb") as excel_file:
-                            excel_bytes = excel_file.read()
-                        st.download_button(
-                            label=f"Descargar {version_sel}",
-                            data=excel_bytes,
-                            file_name=version_sel,
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        )
-                    if st.checkbox(f"Confirmar eliminación de '{version_sel}'"):
-                        confirm_delete = True
-
-                    if st.button("Eliminar esta versión"):
-                        if confirm_delete:
-                            try:
-                                os.remove(file_path)
-                                st.warning(f"Versión '{version_sel}' eliminada.")
-                                st.rerun()
-                            except:
-                                st.error("Error al intentar eliminar la versión.")
-                        else:
-                            st.error("Marca la casilla para confirmar la eliminación.")
-            else:
-                st.write("No hay versiones guardadas (excepto la original).")
-
-            if st.button("Eliminar TODAS las versiones (excepto original)"):
-                for f in versions_no_original:
-                    try:
-                        os.remove(os.path.join(VERSIONS_DIR, f))
-                    except:
-                        pass
-                st.info("Todas las versiones (excepto la original) eliminadas.")
-                st.rerun()
-
-            if st.button("Eliminar TODAS las versiones excepto la última y la original"):
-                if len(versions_no_original) > 1:
-                    sorted_vers = sorted(versions_no_original)
-                    last_version = sorted_vers[-1]
-                    for f in versions_no_original:
-                        if f != last_version:
-                            try:
-                                os.remove(os.path.join(VERSIONS_DIR, f))
-                            except:
-                                pass
-                    st.info(f"Se han eliminado todas las versiones excepto: {last_version} y Stock_Original.xlsx")
-                    st.rerun()
-                else:
-                    st.write("Solo hay una versión o ninguna versión, no se elimina nada más.")
-
-            if st.button("Limpiar Base de Datos"):
-                st.write("¿Seguro que quieres limpiar la base de datos?")
-                if st.checkbox("Sí, confirmar limpieza."):
-                    original_path = os.path.join(VERSIONS_DIR, "Stock_Original.xlsx")
-                    if os.path.exists(original_path):
-                        shutil.copy(original_path, STOCK_FILE)
-                        st.success("✅ Base de datos restaurada al estado original.")
-                        st.rerun()
-                    else:
-                        st.error("❌ No se encontró la copia original en 'versions/Stock_Original.xlsx'.")
+    # Botón para "Limpiar Base de Datos" – se restablece copiando la versión original
+    if st.button("Limpiar Base de Datos"):
+        original_path = os.path.join(VERSIONS_DIR, "Stock_Original.xlsx")
+        if os.path.exists(original_path):
+            try:
+                shutil.copy(original_path, STOCK_FILE)
+                st.success("✅ Base de datos restaurada a la versión original.")
+                st.experimental_rerun()
+            except Exception as e:
+                st.error(f"Error restaurando la base de datos: {e}")
         else:
-            st.error("No hay data_dict. Verifica Stock_Original.xlsx.")
-            st.stop()
-
+            st.error("❌ No se encontró la copia original en 'versions/Stock_Original.xlsx'.")
+    
     with st.expander("⚠️ Alarmas", expanded=False):
         st.write("Col 'Alarma': '🔴' => Stock=0 y Fecha Pedida nula, '🟨' => Stock=0 y Fecha Pedida no nula.")
-
+    
     with st.expander("Reactivo Agotado (Consumido en Lab)", expanded=False):
         if data_dict:
             st.write("Selecciona hoja y reactivo para consumir stock sin crear versión.")
@@ -298,16 +235,13 @@ with st.sidebar:
             hoja_sel_consumo = st.selectbox("Hoja a consumir:", hojas_agotado, key="cons_hoja_sel")
             df_agotado = data_dict[hoja_sel_consumo].copy()
             df_agotado = enforce_types(df_agotado)
-
             if "Nombre producto" in df_agotado.columns and "Ref. Fisher" in df_agotado.columns:
                 disp_consumo = df_agotado.apply(lambda r: f"{r['Nombre producto']} ({r['Ref. Fisher']})", axis=1)
             else:
                 disp_consumo = df_agotado.iloc[:, 0].astype(str)
-
             reactivo_consumir = st.selectbox("Reactivo:", disp_consumo.unique(), key="cons_react_sel")
             idx_c = disp_consumo[disp_consumo == reactivo_consumir].index[0]
             stock_c = df_agotado.at[idx_c, "Stock"] if "Stock" in df_agotado.columns else 0
-
             uds_consumidas = st.number_input("Uds. consumidas", min_value=0, step=1)
             if st.button("Registrar Consumo en Lab"):
                 nuevo_stock = max(0, stock_c - uds_consumidas)
@@ -315,9 +249,6 @@ with st.sidebar:
                 st.warning(f"Consumidas {uds_consumidas} uds. Stock final => {nuevo_stock}")
                 data_dict[hoja_sel_consumo] = df_agotado
                 st.success("No se crea versión, cambios solo en memoria.")
-        else:
-            st.error("No hay data_dict. Revisa Stock_Original.xlsx.")
-            st.stop()
 
 # -------------------------------------------------------------------------
 # CUERPO PRINCIPAL
@@ -341,23 +272,20 @@ df_for_style = df_main_original.copy()
 df_for_style["Alarma"] = df_for_style.apply(calc_alarma, axis=1)
 df_for_style = build_group_info_by_ref(df_for_style, panel_default=sheet_name)
 
-# 2) Ordenamos: primero los grupos con >1 integrante y dentro de ellos la fila título (EsTitulo=True) al inicio; luego los solitarios.
+# 2) Ordenamos: primero los grupos con >1 integrante y dentro de ellos la fila título al inicio; luego los solitarios.
 df_for_style.sort_values(by=["MultiSort", "GroupID", "NotTitulo"], inplace=True)
 df_for_style.reset_index(drop=True, inplace=True)
-
 styled_df = df_for_style.style.apply(style_lote, axis=1)
 
 # Columnas internas a ocultar
 all_cols = df_for_style.columns.tolist()
 cols_to_hide = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID"]
 final_cols = [c for c in all_cols if c not in cols_to_hide]
-
 table_html = styled_df.to_html(columns=final_cols)
 
 # 3) df_main final sin columnas internas
 df_main = df_for_style.copy()
 df_main.drop(columns=cols_to_hide, inplace=True, errors="ignore")
-
 st.write("#### Vista de la Hoja (con columna 'Alarma' y sin columnas internas)")
 st.write(table_html, unsafe_allow_html=True)
 
@@ -366,7 +294,6 @@ if "Nombre producto" in df_main.columns and "Ref. Fisher" in df_main.columns:
     display_series = df_main.apply(lambda r: f"{r['Nombre producto']} ({r['Ref. Fisher']})", axis=1)
 else:
     display_series = df_main.iloc[:, 0].astype(str)
-
 reactivo_sel = st.selectbox("Selecciona Reactivo a Modificar:", display_series.unique(), key="react_modif")
 row_index = display_series[display_series == reactivo_sel].index[0]
 
@@ -439,10 +366,9 @@ if subopcion:
 else:
     sitio_almacenaje_nuevo = sitio_top
 
-# NUEVA SECCIÓN: Si se ingresó Fecha Pedida, preguntar por el pedido del grupo completo.
+# NUEVA SECCIÓN 1: Si se ingresó Fecha Pedida, preguntar por el pedido del grupo completo.
 group_order_selected = None
 if pd.notna(fecha_pedida_nueva):
-    # Usamos df_for_style (ya ordenado y con índice reiniciado)
     group_id = df_for_style.at[row_index, "GroupID"]
     group_reactivos = df_for_style[df_for_style["GroupID"] == group_id]
     if not group_reactivos.empty:
@@ -456,8 +382,25 @@ if pd.notna(fecha_pedida_nueva):
         group_order_selected = st.multiselect(f"¿Quieres pedir también los siguientes reactivos del lote **{lot_name}**?", options, default=options)
         st.markdown('</div>', unsafe_allow_html=True)
 
+# NUEVA SECCIÓN 2: Confirmar recepción del lote
+group_arrival_selected = None
+confirmar_llegada = st.checkbox("Confirmar recepción lote")
+if confirmar_llegada and pd.notna(fecha_llegada_nueva):
+    group_id = df_for_style.at[row_index, "GroupID"]
+    group_reactivos = df_for_style[df_for_style["GroupID"] == group_id]
+    if not group_reactivos.empty:
+        if group_reactivos["EsTitulo"].any():
+            lot_name_arrival = group_reactivos[group_reactivos["EsTitulo"]==True]["Nombre producto"].iloc[0]
+        else:
+            lot_name_arrival = f"Ref. Saturno {group_id}"
+        group_reactivos_reset = group_reactivos.reset_index()
+        options_arrival = group_reactivos_reset.apply(lambda r: f"{r['index']} - {r['Nombre producto']} ({r['Ref. Fisher']})", axis=1).tolist()
+        st.markdown('<div class="big-select">', unsafe_allow_html=True)
+        group_arrival_selected = st.multiselect(f"¿Confirmar recepción para los siguientes reactivos del lote **{lot_name_arrival}**?", options_arrival, default=options_arrival)
+        st.markdown('</div>', unsafe_allow_html=True)
+
 # -------------------------------------------------------------------------
-# Botón para Guardar Cambios (incluye actualización de Fecha Pedida para el grupo)
+# Botón para Guardar Cambios (incluye actualización en grupo)
 # -------------------------------------------------------------------------
 if st.button("Guardar Cambios"):
     if pd.notna(fecha_llegada_nueva):
@@ -488,14 +431,23 @@ if st.button("Guardar Cambios"):
     if "Sitio almacenaje" in df_main.columns:
         df_main.at[row_index, "Sitio almacenaje"] = sitio_almacenaje_nuevo
 
-    # Actualización en grupo: actualizar la "Fecha Pedida" para cada fila seleccionada en el multiselect.
+    # Actualización en grupo para Fecha Pedida:
     if pd.notna(fecha_pedida_nueva) and group_order_selected:
         for label in group_order_selected:
             try:
                 i_val = int(label.split(" - ")[0])
                 df_main.at[i_val, "Fecha Pedida"] = fecha_pedida_nueva
             except Exception as e:
-                st.error(f"Error actualizando índice {label}: {e}")
+                st.error(f"Error actualizando índice {label} (Fecha Pedida): {e}")
+
+    # Actualización en grupo para Fecha Llegada (confirmar recepción):
+    if pd.notna(fecha_llegada_nueva) and group_arrival_selected:
+        for label in group_arrival_selected:
+            try:
+                i_val = int(label.split(" - ")[0])
+                df_main.at[i_val, "Fecha Llegada"] = fecha_llegada_nueva
+            except Exception as e:
+                st.error(f"Error actualizando índice {label} (Fecha Llegada): {e}")
 
     data_dict[sheet_name] = df_main
 
