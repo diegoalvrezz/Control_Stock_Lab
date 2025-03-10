@@ -8,6 +8,8 @@ import os
 from io import BytesIO
 import itertools
 
+st.set_page_config(page_title="Control de Stock con Lotes", layout="centered")
+
 # ---------------------------
 # Autenticación
 # ---------------------------
@@ -51,7 +53,7 @@ if st.button("Cerrar sesión"):
 # ---------------------------
 # Resto de la aplicación
 # ---------------------------
-st.set_page_config(page_title="Control de Stock con Lotes", layout="centered")
+
 
 STOCK_FILE = "Stock_Original.xlsx"
 VERSIONS_DIR = "versions"
