@@ -11,25 +11,28 @@ import itertools
 st.set_page_config(page_title="Control de Stock con Lotes", layout="centered")
 
 # ---------------------------
-# Autenticación
+# Autenticación (estructura actualizada)
 # ---------------------------
-# Define usuarios, nombres y contraseñas (las contraseñas deben estar hasheadas)
-names = ["Usuario Uno", "Usuario Dos"]
-usernames = ["user1", "user2"]
-# Ejemplo de hashes (para 'password1' y 'password2')
-password_hashes = [
-    "$2b$12$2f3Ko.9wW56pI4g6Jv9H4e9tK/E1D2bbG8/SjKnYewcBFLUY.kYFO",  # hash de 'password1'
-    "$2b$12$F9F3nZL9eFQKyF2.0tKbEe2KKFZQ3LCO6X5FA5u2Lz8mL3yh5Ew0a"   # hash de 'password2'
-]
+credentials = {
+    "usernames": {
+        "user1": {
+            "email": "user1@example.com",
+            "name": "Usuario Uno",
+            "password": "$2b$12$2f3Ko.9wW56pI4g6Jv9H4e9tK/E1D2bbG8/SjKnYewcBFLUY.kYFO"
+        },
+        "user2": {
+            "email": "user2@example.com",
+            "name": "Usuario Dos",
+            "password": "$2b$12$F9F3nZL9eFQKyF2.0tKbEe2KKFZQ3LCO6X5FA5u2Lz8mL3yh5Ew0a"
+        }
+    }
+}
 
-# Clave para la cookie y firma (cadena secreta)
 cookie_key = "mi_cookie_secreta"
 signature_key = "mi_signature_secreta"
 
 authenticator = stauth.Authenticate(
-    names=names,
-    usernames=usernames,
-    passwords=password_hashes,
+    credentials,
     cookie_name=cookie_key,
     key=signature_key,
     cookie_expiry_days=1
@@ -39,21 +42,20 @@ name, authentication_status, username = authenticator.login("Inicia sesión", "m
 
 if authentication_status:
     st.success(f"Bienvenido, {name}!")
-else:
-    if authentication_status is False:
-        st.error("Usuario o contraseña incorrectos.")
-    else:
-        st.warning("Por favor, ingresa tus credenciales.")
-    st.stop()  # Detiene la ejecución si no se autentica correctamente
+elif authentication_status is False:
+    st.error("Usuario o contraseña incorrectos.")
+    st.stop()
+elif authentication_status is None:
+    st.warning("Por favor, ingresa tus credenciales.")
+    st.stop()
 
 if st.button("Cerrar sesión"):
     authenticator.logout("Cerrar sesión", "main")
     st.experimental_rerun()
 
 # ---------------------------
-# Resto de la aplicación
+# El resto de tu aplicación original desde aquí
 # ---------------------------
-
 
 STOCK_FILE = "Stock_Original.xlsx"
 VERSIONS_DIR = "versions"
@@ -62,7 +64,6 @@ ORIGINAL_FILE = os.path.join(VERSIONS_DIR, "Stock_Original.xlsx")
 os.makedirs(VERSIONS_DIR, exist_ok=True)
 
 def init_original():
-    """Copia STOCK_FILE en versions/Stock_Original.xlsx si no existe."""
     if not os.path.exists(ORIGINAL_FILE):
         if os.path.exists(STOCK_FILE):
             shutil.copy(STOCK_FILE, ORIGINAL_FILE)
