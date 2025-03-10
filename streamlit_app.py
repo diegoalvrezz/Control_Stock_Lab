@@ -38,7 +38,20 @@ authenticator = stauth.Authenticate(
     cookie_expiry_days=1
 )
 
-name, authentication_status, username = authenticator.login(location="main")
+authenticator.login(location="main")
+
+if st.session_state["authentication_status"]:
+    st.success(f"Bienvenido, {st.session_state['name']}!")
+elif st.session_state["authentication_status"] is False:
+    st.error("Usuario o contraseña incorrectos.")
+    st.stop()
+elif st.session_state["authentication_status"] is None:
+    st.warning("Por favor, ingresa tus credenciales.")
+    st.stop()
+
+if st.button("Cerrar sesión"):
+    authenticator.logout()
+    st.rerun()
 
 
 
