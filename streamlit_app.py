@@ -386,7 +386,7 @@ with st.sidebar:
 # -------------------------------------------------------------------------
 # CUERPO PRINCIPAL
 # -------------------------------------------------------------------------
-st.title("📦 Control de Stock: Agrupación por Ref. Saturno y Pedido del Lote Completo")
+st.title("📦 Control de Stock Secuenciación")
 
 if not data_dict:
     st.error("No se pudo cargar la base de datos.")
