@@ -395,6 +395,108 @@ if not data_dict:
 st.markdown("---")
 st.header("Edición en Hoja Principal y Guardado")
 
+# -------------------------------------------------------------------------
+# NUEVA SECCIÓN: Agregar un nuevo lote
+# -------------------------------------------------------------------------
+with st.expander("➕ Agregar un nuevo lote"):
+    st.write("Completa los datos para crear un nuevo lote en la base de datos.")
+    
+    # 1) Elige en qué hoja (sheet) quieres agregar el nuevo lote
+    hojas_disponibles = list(data_dict.keys())
+    hoja_destino = st.selectbox("Selecciona la hoja de destino", hojas_disponibles)
+    
+    # 2) Leemos el DataFrame de esa hoja
+    df_target = data_dict[hoja_destino].copy()
+    
+    # --- Para el Producto y referencias ---
+    # Aquí tienes varias opciones, por ejemplo:
+    # - Permitir escribir manualmente "Nombre producto"
+    # - Seleccionar un producto existente
+    # - Ambas cosas (combinar un selectbox + text_input)
+    
+    # Opción A: Seleccionar un producto ya existente:
+    productos_existentes = df_target["Nombre producto"].dropna().unique().tolist()
+    producto_nuevo = st.selectbox(
+        "Selecciona el 'Nombre producto' (o crea uno nuevo desde abajo):",
+        productos_existentes
+    )
+    # Opción B: Permitir crear un producto completamente nuevo
+    producto_creado = st.text_input("...o escribe un nuevo 'Nombre producto':", "")
+    if producto_creado.strip():
+        producto_nuevo = producto_creado.strip()
+    
+    # Introducir la Ref. Fisher (o Saturno, si lo usas)
+    ref_fisher_nuevo = st.text_input("Ref. Fisher", "")
+    ref_saturno_nuevo = st.number_input("Ref. Saturno", value=0, step=1)
+    
+    # --- Datos del lote y sus fechas ---
+    lote_new = st.number_input("Nº de Lote", value=1, step=1)
+    cad_new = st.date_input("Caducidad", value=None)
+    
+    fecha_ped_new = st.date_input("Fecha Pedida (opcional)", value=None, key="fped_new_lote")
+    fecha_lleg_new = st.date_input("Fecha Llegada (opcional)", value=None, key="flleg_new_lote")
+    
+    # Sitio de almacenaje
+    sitio_nuevo = st.text_input("Sitio almacenaje (ej: Congelador 1 - Cajón 2)", "")
+    
+    # Stock inicial y/o unidades
+    uds_iniciales = st.number_input("Uds. iniciales", value=0, step=1)
+    stock_inicial = st.number_input("Stock inicial", value=0, step=1)
+    
+    # Botón para añadir la nueva fila
+    if st.button("Agregar este nuevo lote"):
+        # A) Creamos un diccionario con la nueva fila
+        nueva_fila = {
+            "Ref. Saturno": ref_saturno_nuevo,
+            "Ref. Fisher": ref_fisher_nuevo,
+            "Nombre producto": producto_nuevo,
+            "NºLote": lote_new,
+            "Caducidad": cad_new if cad_new else pd.NaT,
+            "Fecha Pedida": fecha_ped_new if fecha_ped_new else pd.NaT,
+            "Fecha Llegada": fecha_lleg_new if fecha_lleg_new else pd.NaT,
+            "Sitio almacenaje": sitio_nuevo,
+            "Uds.": uds_iniciales,
+            "Stock": stock_inicial,
+            # Si tu hoja tiene más columnas (p.e. "Tª"), añádelas aquí
+            # "Tª": "",
+        }
+        
+        # B) Añadimos esa nueva fila al DataFrame en memoria
+        df_target = pd.concat([df_target, pd.DataFrame([nueva_fila])], ignore_index=True)
+        
+        # C) Actualizamos el data_dict con el DataFrame modificado
+        data_dict[hoja_destino] = df_target
+        
+        # D) Guardamos en una nueva versión Excel y en STOCK_FILE (igual que en tu botón "Guardar Cambios")
+        new_file = crear_nueva_version_filename()
+        with pd.ExcelWriter(new_file, engine="openpyxl") as writer:
+            for sht, df_sht in data_dict.items():
+                ocultar = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID"]
+                temp = df_sht.drop(columns=ocultar, errors="ignore")
+                temp.to_excel(writer, sheet_name=sht, index=False)
+
+        with pd.ExcelWriter(STOCK_FILE, engine="openpyxl") as writer:
+            for sht, df_sht in data_dict.items():
+                ocultar = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID"]
+                temp = df_sht.drop(columns=ocultar, errors="ignore")
+                temp.to_excel(writer, sheet_name=sht, index=False)
+
+        st.success(f"✅ Nuevo lote añadido y guardado en '{new_file}' y '{STOCK_FILE}'.")
+        
+        # E) Ofrecemos descargar en el momento
+        excel_bytes = generar_excel_en_memoria(df_target, sheet_nm=hoja_destino)
+        st.download_button(
+            label="Descargar Excel con el nuevo lote",
+            data=excel_bytes,
+            file_name="Reporte_Stock_NuevoLote.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        
+        # F) Refrescamos la app para que se vea el nuevo registro
+        st.rerun()
+
+
+
 hojas_principales = list(data_dict.keys())
 sheet_name = st.selectbox("Selecciona la hoja a editar:", hojas_principales, key="main_sheet_sel")
 df_main_original = data_dict[sheet_name].copy()
