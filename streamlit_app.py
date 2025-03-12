@@ -54,7 +54,6 @@ if st.button("Cerrar sesión"):
     authenticator.logout()
     st.rerun()
 
-
 # -------------------------------------------------------------------------
 # EXCEL A (Stock_Original) - Rutas y funciones
 # -------------------------------------------------------------------------
@@ -125,7 +124,6 @@ def crear_nueva_version_filename_b():
     fecha_hora = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     return os.path.join(VERSIONS_DIR_B, f"StockB_{fecha_hora}.xlsx")
 
-
 # -------------------------------------------------------------------------
 # FUNCIONES COMUNES
 # -------------------------------------------------------------------------
@@ -161,11 +159,14 @@ def enforce_types(df: pd.DataFrame):
     return df
 
 def load_data_b():
-    """Lee todas las hojas de STOCK_FILE_B (histórico)."""
+    """Lee todas las hojas de STOCK_FILE_B (histórico) y elimina 'Restantes'."""
     if not os.path.exists(STOCK_FILE_B):
         return {}
     try:
         data_b = pd.read_excel(STOCK_FILE_B, sheet_name=None, engine="openpyxl")
+        for shtb, df_sheet_b in data_b.items():
+            if "Restantes" in df_sheet_b.columns:
+                df_sheet_b.drop(columns=["Restantes"], inplace=True, errors="ignore")
         return data_b
     except:
         return {}
@@ -277,7 +278,6 @@ def style_lote(row):
         idx = row.index.get_loc("Nombre producto")
         styles[idx] += "; font-weight:bold"
     return styles
-
 
 st.markdown("""
     <style>
@@ -433,9 +433,8 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones B (Histórico)", expand
         else:
             st.error("No se encontró la copia original de B.")
 
-
 # -------------------------------------------------------------------------
-# SIDEBAR => Ver Base de Datos Histórica B (SIN anidarlo)
+# SIDEBAR => Ver Base de Datos Histórica B (SIN anidar)
 # -------------------------------------------------------------------------
 with st.sidebar.expander("Ver Base de Datos Histórica (Excel B)", expanded=False):
     if data_dict_b:
@@ -459,17 +458,19 @@ with st.sidebar.expander("Ver Base de Datos Histórica (Excel B)", expanded=Fals
     else:
         st.write("No se encontró data_dict_b o está vacío.")
 
+
 # -------------------------------------------------------------------------
 # REACTIVO AGOTADO (Consumido en Lab):
-#  - Elige Hoja (ej: FOCUS/OCA/OCA PLUS)
+#  - Elige Hoja
 #  - Elige Nombre producto
 #  - Elige NºLote
-#  - Quita 1 (o X) del stock en A
-#  - Elimina la fila en B
+#  - Quita X del stock en A
+#  - Si stock=0 => vacía cols: NºLote, Caducidad, Fecha Pedida, Fecha Llegada, Sitio almacenaje
+#  - Elimina la fila en B cuando coinciden (Nombre producto, NºLote).
 # -------------------------------------------------------------------------
 with st.expander("Reactivo Agotado (Consumido en Lab)", expanded=False):
     if data_dict:
-        st.write("Selecciona la hoja, el nombre de producto y nº de lote para consumir stock en A y eliminar la fila en B.")
+        st.write("Selecciona la hoja, el nombre de producto y nº de lote para consumir stock en A y eliminar la fila en B (si coincide).")
         hojas_agotado = list(data_dict.keys())
         hoja_sel_consumo = st.selectbox("Hoja de A para consumir:", hojas_agotado, key="cons_hoja_sel")
 
@@ -509,6 +510,15 @@ with st.expander("Reactivo Agotado (Consumido en Lab)", expanded=False):
                 if st.button("Consumir en Lab"):
                     nuevo_stock = max(0, stock_c - uds_consumidas)
                     df_agotado.at[idx_c, "Stock"] = nuevo_stock
+
+                    # Si stock = 0 => vaciar columnas
+                    if nuevo_stock == 0:
+                        df_agotado.at[idx_c, "NºLote"] = ""
+                        df_agotado.at[idx_c, "Caducidad"] = pd.NaT
+                        df_agotado.at[idx_c, "Fecha Pedida"] = pd.NaT
+                        df_agotado.at[idx_c, "Fecha Llegada"] = pd.NaT
+                        df_agotado.at[idx_c, "Sitio almacenaje"] = ""
+
                     st.warning(f"Consumidas {uds_consumidas} uds. Stock final => {nuevo_stock}")
                     data_dict[hoja_sel_consumo] = df_agotado
 
@@ -527,12 +537,15 @@ with st.expander("Reactivo Agotado (Consumido en Lab)", expanded=False):
                             temp = df_sht.drop(columns=cols_internos, errors="ignore")
                             temp.to_excel(writer, sheet_name=sht, index=False)
 
-                    # b) Eliminar fila en B (si existe)
+                    # b) Eliminar fila en B (si hoja_sel_consumo existe en B)
                     if hoja_sel_consumo in data_dict_b:
                         df_b_hoja = data_dict_b[hoja_sel_consumo].copy()
                         if "Nombre producto" in df_b_hoja.columns and "NºLote" in df_b_hoja.columns:
-                            df_b_hoja = df_b_hoja[~((df_b_hoja["Nombre producto"] == nombre_sel) &
-                                                   (df_b_hoja["NºLote"] == lote_sel))]
+                            # Eliminamos sólo si coincide EXACTO Nombre + Lote
+                            df_b_hoja = df_b_hoja[~(
+                                (df_b_hoja["Nombre producto"] == nombre_sel) &
+                                (df_b_hoja["NºLote"] == lote_sel)
+                            )]
                             data_dict_b[hoja_sel_consumo] = df_b_hoja
 
                             new_file_b = crear_nueva_version_filename_b()
@@ -544,7 +557,7 @@ with st.expander("Reactivo Agotado (Consumido en Lab)", expanded=False):
                                 for sht_b, df_sht_b in data_dict_b.items():
                                     df_sht_b.to_excel(writer_b, sheet_name=sht_b, index=False)
 
-                    st.success(f"✅ Cambios guardados en '{new_file}' y '{STOCK_FILE}'. Fila eliminada en B para ese Nombre+Lote.")
+                    st.success(f"✅ Cambios guardados en '{new_file}' y '{STOCK_FILE}'. Fila eliminada en B (si coincidía Nombre+Lote).")
                     excel_bytes = generar_excel_en_memoria(df_agotado, sheet_nm=hoja_sel_consumo)
                     st.download_button(
                         label="Descargar Excel modificado (A)",
@@ -744,6 +757,7 @@ if st.button("Guardar Cambios"):
             temp.to_excel(writer, sheet_name=sht, index=False)
 
     # ===== EJEMPLO: Insertar la misma entrada en B (histórico)
+    # (Ajusta si siempre quieres crear nueva fila en B u otra lógica)
     if sheet_name not in data_dict_b:
         data_dict_b[sheet_name] = pd.DataFrame()
 
