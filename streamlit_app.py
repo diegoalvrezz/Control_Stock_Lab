@@ -691,7 +691,7 @@ if st.button("Guardar Cambios en Hoja A"):
 
 
     if "NºLote" in df_main.columns:
-        df_main.at[row_index,"NºLote"] = int(lote_new)
+        df_main.at[row_index,"NºLote"] = str(lote_new)
     if "Caducidad" in df_main.columns:
         df_main.at[row_index,"Caducidad"] = cad_new if pd.notna(cad_new) else pd.NaT
     if "Fecha Pedida" in df_main.columns:
