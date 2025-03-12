@@ -676,9 +676,12 @@ if st.button("Guardar Cambios en Hoja A"):
         fped_new = pd.NaT
 
     if "Stock" in df_main.columns:
-        if flleg_new!=fecha_llegada_actual and pd.notna(flleg_new):
-            df_main.at[row_index,"Stock"] = stock_actual+uds_actual
-            st.info(f"Añadidas {uds_actual} uds => stock={stock_actual+uds_actual}")
+    # Si el usuario introdujo una nueva "Fecha Llegada" (flleg_new) distinta de la que ya había
+    # y no es nula, entonces sumamos uds_actual al stock_actual
+        if flleg_new != fecha_llegada_actual and pd.notna(flleg_new):
+            df_main.at[row_index, "Stock"] = stock_actual + uds_actual
+            st.info(f"Añadidas {uds_actual} uds => stock={stock_actual + uds_actual}")
+
 
     if "NºLote" in df_main.columns:
         df_main.at[row_index,"NºLote"] = int(lote_new)
