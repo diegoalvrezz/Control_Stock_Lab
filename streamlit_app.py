@@ -54,9 +54,9 @@ if st.button("Cerrar sesión"):
     st.rerun()
 
 # -------------------------------------------------------------------------
-# ARCHIVOS y FUNCIONES PARA EXCEL A (tu original)
+# EXCEL A (Stock_Original) - Rutas y funciones
 # -------------------------------------------------------------------------
-STOCK_FILE = "Stock_Original.xlsx"  # Excel A
+STOCK_FILE = "Stock_Original.xlsx"   # Excel A
 VERSIONS_DIR = "versions"
 ORIGINAL_FILE = os.path.join(VERSIONS_DIR, "Stock_Original.xlsx")
 
@@ -88,6 +88,53 @@ def load_data():
 
 data_dict = load_data()
 
+def crear_nueva_version_filename():
+    fecha_hora = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    return os.path.join(VERSIONS_DIR, f"Stock_{fecha_hora}.xlsx")
+
+# -------------------------------------------------------------------------
+# EXCEL B (Stock_Historico) - Rutas y funciones
+# -------------------------------------------------------------------------
+STOCK_FILE_B = "Stock_Historico.xlsx"  # Excel B (histórico)
+VERSIONS_DIR_B = "versions_b"
+ORIGINAL_FILE_B = os.path.join(VERSIONS_DIR_B, "Stock_Historico_Original.xlsx")
+
+os.makedirs(VERSIONS_DIR_B, exist_ok=True)
+
+def init_original_b():
+    """Inicia un archivo B vacío si no existe la copia original."""
+    if not os.path.exists(ORIGINAL_FILE_B):
+        if os.path.exists(STOCK_FILE_B):
+            shutil.copy(STOCK_FILE_B, ORIGINAL_FILE_B)
+        else:
+            # Creamos un excel vacío con 1 hoja "Hoja1"
+            df_empty = pd.DataFrame(columns=[
+                "Ref. Saturno","Ref. Fisher","Nombre producto","NºLote","Caducidad",
+                "Fecha Pedida","Fecha Llegada","Sitio almacenaje","Uds.","Stock"
+            ])
+            with pd.ExcelWriter(STOCK_FILE_B, engine="openpyxl") as writer:
+                df_empty.to_excel(writer, sheet_name="Hoja1", index=False)
+            shutil.copy(STOCK_FILE_B, ORIGINAL_FILE_B)
+
+init_original_b()
+
+def crear_nueva_version_filename_b():
+    fecha_hora = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    return os.path.join(VERSIONS_DIR_B, f"StockB_{fecha_hora}.xlsx")
+
+# -------------------------------------------------------------------------
+# FUNCIONES COMUNES
+# -------------------------------------------------------------------------
+import openpyxl
+
+def generar_excel_en_memoria(df_act: pd.DataFrame, sheet_nm="Hoja1"):
+    """Genera un Excel en memoria para descargar."""
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df_act.to_excel(writer, index=False, sheet_name=sheet_nm)
+    output.seek(0)
+    return output.getvalue()
+
 def enforce_types(df: pd.DataFrame):
     """Fuerza tipos en las columnas habituales."""
     if "Ref. Saturno" in df.columns:
@@ -111,63 +158,25 @@ def enforce_types(df: pd.DataFrame):
         df["Stock"] = pd.to_numeric(df["Stock"], errors="coerce").fillna(0).astype(int)
     return df
 
-def crear_nueva_version_filename():
-    fecha_hora = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    return os.path.join(VERSIONS_DIR, f"Stock_{fecha_hora}.xlsx")
-
-def generar_excel_en_memoria(df_act: pd.DataFrame, sheet_nm="Hoja1"):
-    """Genera un Excel en memoria para descargar."""
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        df_act.to_excel(writer, index=False, sheet_name=sheet_nm)
-    output.seek(0)
-    return output.getvalue()
-
 # -------------------------------------------------------------------------
-# EXCEL B (Histórico)
+# CARGA LOS DICCIONARIOS DE A y B
 # -------------------------------------------------------------------------
-STOCK_FILE_B = "Stock_Historico.xlsx"
-VERSIONS_DIR_B = "versions_b"
-ORIGINAL_FILE_B = os.path.join(VERSIONS_DIR_B, "Stock_Historico_Original.xlsx")
-
-os.makedirs(VERSIONS_DIR_B, exist_ok=True)
-
-def init_original_b():
-    if not os.path.exists(ORIGINAL_FILE_B):
-        if os.path.exists(STOCK_FILE_B):
-            shutil.copy(STOCK_FILE_B, ORIGINAL_FILE_B)
-        else:
-            # Si no existe Stock_Historico.xlsx, creamos uno vacío:
-            df_empty = pd.DataFrame(columns=["Ref. Saturno","Ref. Fisher","Nombre producto","NºLote",
-                                             "Caducidad","Fecha Pedida","Fecha Llegada","Sitio almacenaje",
-                                             "Uds.","Stock"])
-            with pd.ExcelWriter(STOCK_FILE_B, engine="openpyxl") as writer:
-                df_empty.to_excel(writer, sheet_name="Hoja1", index=False)
-            shutil.copy(STOCK_FILE_B, ORIGINAL_FILE_B)
-
-init_original_b()
-
 def load_data_b():
-    """Lee todas las hojas de STOCK_FILE_B"""
+    """Lee todas las hojas de STOCK_FILE_B (histórico)."""
+    if not os.path.exists(STOCK_FILE_B):
+        return {}
     try:
         data_b = pd.read_excel(STOCK_FILE_B, sheet_name=None, engine="openpyxl")
         return data_b
-    except FileNotFoundError:
-        st.warning("No se encontró Stock_Historico.xlsx, se creará al vuelo.")
-        return {}
-    except Exception as e:
-        st.error(f"Error al cargar Stock_Historico.xlsx: {e}")
+    except:
         return {}
 
 data_dict_b = load_data_b()
-
-
-def crear_nueva_version_filename_b():
-    fecha_hora = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    return os.path.join(VERSIONS_DIR_B, f"StockB_{fecha_hora}.xlsx")
+if data_dict_b is None:
+    data_dict_b = {}
 
 # -------------------------------------------------------------------------
-# DICCIONARIO DE LOTES (mantenemos tu LOTS_DATA, etc.)
+# LÓGICA DE LOTES Y ESTILOS (del original)
 # -------------------------------------------------------------------------
 LOTS_DATA = {
     "FOCUS": {
@@ -226,14 +235,14 @@ def build_group_info_by_ref(df: pd.DataFrame, panel_default=None):
     df["GroupID"] = df["Ref. Saturno"]
     group_sizes = df.groupby("GroupID").size().to_dict()
     df["GroupCount"] = df["GroupID"].apply(lambda x: group_sizes.get(x, 0))
-    
+
     unique_ids = sorted(df["GroupID"].unique())
     group_color_mapping = {}
     color_cycle_local = itertools.cycle(colors)
     for gid in unique_ids:
         group_color_mapping[gid] = next(color_cycle_local)
     df["ColorGroup"] = df["GroupID"].apply(lambda x: group_color_mapping.get(x, "#FFFFFF"))
-    
+
     group_titles = []
     if panel_default in LOTS_DATA:
         group_titles = [t.strip().lower() for t in LOTS_DATA[panel_default].keys()]
@@ -279,116 +288,273 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # -------------------------------------------------------------------------
-# ADMINISTRAR VERSIONES DE B (Histórico)
+# BARRA LATERAL => GESTIONAR VERSIONES DE A (tal cual tu código)
 # -------------------------------------------------------------------------
-with st.sidebar.expander("🔎 Ver / Gestionar versiones B (Histórico)", expanded=False):
-    files_b = sorted(os.listdir(VERSIONS_DIR_B))
-    versions_no_original_b = [f for f in files_b if f != "Stock_Historico_Original.xlsx"]
-    if versions_no_original_b:
-        version_sel_b = st.selectbox("Selecciona versión B:", versions_no_original_b)
-        confirm_delete_b = False
+with st.sidebar:
+    with st.expander("🔎 Ver / Gestionar versiones guardadas", expanded=False):
+        if data_dict:
+            files = sorted(os.listdir(VERSIONS_DIR))
+            versions_no_original = [f for f in files if f != "Stock_Original.xlsx"]
+            if versions_no_original:
+                version_sel = st.selectbox("Selecciona versión:", versions_no_original)
+                confirm_delete = False
 
-        if version_sel_b:
-            file_path_b = os.path.join(VERSIONS_DIR_B, version_sel_b)
-            if os.path.isfile(file_path_b):
-                with open(file_path_b, "rb") as excel_file_b:
-                    excel_bytes_b = excel_file_b.read()
-                st.download_button(
-                    label=f"Descargar {version_sel_b}",
-                    data=excel_bytes_b,
-                    file_name=version_sel_b,
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-            if st.checkbox(f"Confirmar eliminación de '{version_sel_b}' (B)"):
-                confirm_delete_b = True
+                if version_sel:
+                    file_path = os.path.join(VERSIONS_DIR, version_sel)
+                    if os.path.isfile(file_path):
+                        with open(file_path, "rb") as excel_file:
+                            excel_bytes = excel_file.read()
+                        st.download_button(
+                            label=f"Descargar {version_sel}",
+                            data=excel_bytes,
+                            file_name=version_sel,
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
+                    if st.checkbox(f"Confirmar eliminación de '{version_sel}'"):
+                        confirm_delete = True
 
-            if st.button("Eliminar esta versión B"):
-                if confirm_delete_b:
+                    if st.button("Eliminar esta versión"):
+                        if confirm_delete:
+                            try:
+                                os.remove(file_path)
+                                st.warning(f"Versión '{version_sel}' eliminada.")
+                                st.rerun()
+                            except:
+                                st.error("Error al intentar eliminar la versión.")
+                        else:
+                            st.error("Marca la casilla para confirmar la eliminación.")
+            else:
+                st.write("No hay versiones guardadas (excepto la original).")
+
+            if st.button("Eliminar TODAS las versiones (excepto original)"):
+                for f in versions_no_original:
                     try:
-                        os.remove(file_path_b)
-                        st.warning(f"Versión '{version_sel_b}' eliminada de B.")
-                        st.rerun()
-                    except:
-                        st.error("Error al intentar eliminar la versión.")
-                else:
-                    st.error("Marca la casilla para confirmar la eliminación.")
-    else:
-        st.write("No hay versiones guardadas de B (excepto la original).")
-
-    if st.button("Eliminar TODAS las versiones B (excepto original)"):
-        for f in versions_no_original_b:
-            try:
-                os.remove(os.path.join(VERSIONS_DIR_B, f))
-            except:
-                pass
-        st.info("Todas las versiones de B (excepto la original) eliminadas.")
-        st.rerun()
-
-    if st.button("Eliminar TODAS las versiones B excepto la última y la original"):
-        if len(versions_no_original_b) > 1:
-            sorted_vers_b = sorted(versions_no_original_b)
-            last_version_b = sorted_vers_b[-1]
-            for f in versions_no_original_b:
-                if f != last_version_b:
-                    try:
-                        os.remove(os.path.join(VERSIONS_DIR_B, f))
+                        os.remove(os.path.join(VERSIONS_DIR, f))
                     except:
                         pass
-            st.info(f"Se han eliminado todas las versiones excepto: {last_version_b} y Stock_Historico_Original.xlsx")
-            st.rerun()
+                st.info("Todas las versiones (excepto la original) eliminadas.")
+                st.rerun()
+
+            if st.button("Eliminar TODAS las versiones excepto la última y la original"):
+                if len(versions_no_original) > 1:
+                    sorted_vers = sorted(versions_no_original)
+                    last_version = sorted_vers[-1]
+                    for f in versions_no_original:
+                        if f != last_version:
+                            try:
+                                os.remove(os.path.join(VERSIONS_DIR, f))
+                            except:
+                                pass
+                    st.info(f"Se han eliminado todas las versiones excepto: {last_version} y Stock_Original.xlsx")
+                    st.rerun()
+                else:
+                    st.write("Solo hay una versión o ninguna versión, no se elimina nada más.")
+
+            # --- Botón de Limpiar Base de Datos ---
+            limpiar_confirmado = st.checkbox("Confirmar limpieza de la base de datos", key="confirmar_limpiar")
+            if st.button("Limpiar Base de Datos") and limpiar_confirmado:
+                original_path = os.path.join(VERSIONS_DIR, "Stock_Original.xlsx")
+                if os.path.exists(original_path):
+                    shutil.copy(original_path, STOCK_FILE)
+                    st.success("✅ Base de datos restaurada al estado original.")
+                    st.rerun()
+                else:
+                    st.error("❌ No se encontró la copia original en 'versions/Stock_Original.xlsx'.")
         else:
-            st.write("Solo hay una versión o ninguna versión, no se elimina nada más.")
+            st.error("No hay data_dict. Verifica Stock_Original.xlsx.")
+            st.stop()
 
-    # Botón de Limpiar Base de Datos B
-    if st.button("Limpiar Base de Datos B"):
-        if os.path.exists(ORIGINAL_FILE_B):
-            shutil.copy(ORIGINAL_FILE_B, STOCK_FILE_B)
-            st.success("Base de datos B restaurada al estado original.")
-            st.rerun()
+# -------------------------------------------------------------------------
+# BARRA LATERAL => GESTIONAR VERSIONES DE B (Histórico)
+# -------------------------------------------------------------------------
+    with st.expander("🔎 Ver / Gestionar versiones B (Histórico)", expanded=False):
+        files_b = sorted(os.listdir(VERSIONS_DIR_B))
+        versions_no_original_b = [f for f in files_b if f != "Stock_Historico_Original.xlsx"]
+        if versions_no_original_b:
+            version_sel_b = st.selectbox("Selecciona versión B:", versions_no_original_b)
+            confirm_delete_b = False
+
+            if version_sel_b:
+                file_path_b = os.path.join(VERSIONS_DIR_B, version_sel_b)
+                if os.path.isfile(file_path_b):
+                    with open(file_path_b, "rb") as excel_file_b:
+                        excel_bytes_b = excel_file_b.read()
+                    st.download_button(
+                        label=f"Descargar {version_sel_b}",
+                        data=excel_bytes_b,
+                        file_name=version_sel_b,
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+                if st.checkbox(f"Confirmar eliminación de '{version_sel_b}' (B)"):
+                    confirm_delete_b = True
+
+                if st.button("Eliminar esta versión B"):
+                    if confirm_delete_b:
+                        try:
+                            os.remove(file_path_b)
+                            st.warning(f"Versión '{version_sel_b}' eliminada de B.")
+                            st.rerun()
+                        except:
+                            st.error("Error al intentar eliminar la versión.")
+                    else:
+                        st.error("Marca la casilla para confirmar la eliminación.")
         else:
-            st.error("No se encontró la copia original de B.")
+            st.write("No hay versiones guardadas de B (excepto la original).")
+
+        if st.button("Eliminar TODAS las versiones B (excepto original)"):
+            for f in versions_no_original_b:
+                try:
+                    os.remove(os.path.join(VERSIONS_DIR_B, f))
+                except:
+                    pass
+            st.info("Todas las versiones de B (excepto la original) eliminadas.")
+            st.rerun()
+
+        if st.button("Eliminar TODAS las versiones B excepto la última y la original"):
+            if len(versions_no_original_b) > 1:
+                sorted_vers_b = sorted(versions_no_original_b)
+                last_version_b = sorted_vers_b[-1]
+                for f in versions_no_original_b:
+                    if f != last_version_b:
+                        try:
+                            os.remove(os.path.join(VERSIONS_DIR_B, f))
+                        except:
+                            pass
+                st.info(f"Se han eliminado todas las versiones excepto: {last_version_b} y Stock_Historico_Original.xlsx")
+                st.rerun()
+            else:
+                st.write("Solo hay una versión o ninguna versión, no se elimina nada más.")
+
+        # Limpiar Base de Datos B
+        if st.button("Limpiar Base de Datos B"):
+            if os.path.exists(ORIGINAL_FILE_B):
+                shutil.copy(ORIGINAL_FILE_B, STOCK_FILE_B)
+                st.success("Base de datos B restaurada al estado original.")
+                st.rerun()
+            else:
+                st.error("No se encontró la copia original de B.")
+
+
+    # ---------------------------------------------------------------------
+    # EXPANDER PARA VER BASE DE DATOS B (Histórico)
+    # ---------------------------------------------------------------------
+    with st.expander("Ver Base de Datos Histórica (Excel B)", expanded=False):
+        if data_dict_b:
+            hojas_b = list(data_dict_b.keys())
+            hoja_b_sel = st.selectbox("Selecciona hoja en B:", hojas_b)
+            df_b_vista = data_dict_b[hoja_b_sel].copy()
+
+            # Orden por Nombre producto + NºLote (si existen)
+            if "Nombre producto" in df_b_vista.columns and "NºLote" in df_b_vista.columns:
+                df_b_vista.sort_values(by=["Nombre producto","NºLote"], inplace=True, ignore_index=True)
+
+            st.write("Vista de B (Histórico):")
+            st.dataframe(df_b_vista)
+
+            excel_b_mem = generar_excel_en_memoria(df_b_vista, sheet_nm=hoja_b_sel)
+            st.download_button(
+                label="Descargar hoja de Excel B",
+                data=excel_b_mem,
+                file_name="Hoja_Historico_B.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        else:
+            st.write("No se encontró data_dict_b o está vacío.")
+
+
+    # ---------------------------------------------------------------------
+    # REACTIVO AGOTADO (Consumido en Lab) => Actualizar Stock en A y Eliminar en B
+    # ---------------------------------------------------------------------
+    with st.expander("Reactivo Agotado (Consumido en Lab)", expanded=False):
+        if data_dict:
+            st.write("Selecciona hoja y reactivo (con lote) para consumir stock y guardar versión en A, y eliminar fila en B.")
+            hojas_agotado = list(data_dict.keys())
+            hoja_sel_consumo = st.selectbox("Hoja a consumir (A):", hojas_agotado, key="cons_hoja_sel")
+
+            df_agotado = data_dict[hoja_sel_consumo].copy()
+            df_agotado = enforce_types(df_agotado)
+
+            # Construimos un display que muestre "Nombre producto (NºLote)" para distinguir
+            if "Nombre producto" in df_agotado.columns and "NºLote" in df_agotado.columns:
+                disp_consumo = df_agotado.apply(
+                    lambda r: f"{r['Nombre producto']} (Lote:{r['NºLote']})", axis=1
+                )
+            else:
+                # fallback
+                disp_consumo = df_agotado.iloc[:, 0].astype(str)
+
+            reactivo_consumir = st.selectbox("Reactivo+Lote:", disp_consumo.unique(), key="cons_react_sel")
+            idx_c = disp_consumo[disp_consumo == reactivo_consumir].index[0]
+
+            stock_c = df_agotado.at[idx_c, "Stock"] if "Stock" in df_agotado.columns else 0
+            nombre_c = df_agotado.at[idx_c, "Nombre producto"] if "Nombre producto" in df_agotado.columns else ""
+            lote_c = df_agotado.at[idx_c, "NºLote"] if "NºLote" in df_agotado.columns else 0
+
+            uds_consumidas = st.number_input("Uds. consumidas", min_value=0, step=1, key="uds_consumidas")
+            if st.button("Registrar Consumo en Lab"):
+                nuevo_stock = max(0, stock_c - uds_consumidas)
+                df_agotado.at[idx_c, "Stock"] = nuevo_stock
+                st.warning(f"Consumidas {uds_consumidas} uds. Stock final => {nuevo_stock}")
+                data_dict[hoja_sel_consumo] = df_agotado
+
+            if st.button("Guardar Cambios en Consumo Lab"):
+                # 1) Guardamos en A, creando nueva versión
+                new_file = crear_nueva_version_filename()
+                with pd.ExcelWriter(new_file, engine="openpyxl") as writer:
+                    for sht, df_sht in data_dict.items():
+                        cols_internos = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID"]
+                        temp = df_sht.drop(columns=cols_internos, errors="ignore")
+                        temp.to_excel(writer, sheet_name=sht, index=False)
+                with pd.ExcelWriter(STOCK_FILE, engine="openpyxl") as writer:
+                    for sht, df_sht in data_dict.items():
+                        cols_internos = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID"]
+                        temp = df_sht.drop(columns=cols_internos, errors="ignore")
+                        temp.to_excel(writer, sheet_name=sht, index=False)
+
+                # 2) Eliminamos la fila en B (mismo hoja_sel_consumo si existe en B) que coincida en (Nombre producto, NºLote)
+                if hoja_sel_consumo in data_dict_b:
+                    df_b_hoja = data_dict_b[hoja_sel_consumo].copy()
+                    # Eliminamos filas donde coincidan Nombre producto y NºLote
+                    if "Nombre producto" in df_b_hoja.columns and "NºLote" in df_b_hoja.columns:
+                        df_b_hoja = df_b_hoja[~((df_b_hoja["Nombre producto"] == nombre_c) &
+                                               (df_b_hoja["NºLote"] == lote_c))]
+                        data_dict_b[hoja_sel_consumo] = df_b_hoja
+                        # Guardamos version B
+                        new_file_b = crear_nueva_version_filename_b()
+                        with pd.ExcelWriter(new_file_b, engine="openpyxl") as writer_b:
+                            for shtb, df_shtb in data_dict_b.items():
+                                df_shtb.to_excel(writer_b, sheet_name=shtb, index=False)
+                        with pd.ExcelWriter(STOCK_FILE_B, engine="openpyxl") as writer_b:
+                            for shtb, df_shtb in data_dict_b.items():
+                                df_shtb.to_excel(writer_b, sheet_name=shtb, index=False)
+
+                st.success(f"✅ Cambios guardados en '{new_file}' y '{STOCK_FILE}'. Fila eliminada en B si coincidía.")
+                excel_bytes = generar_excel_en_memoria(df_agotado, sheet_nm=hoja_sel_consumo)
+                st.download_button(
+                    label="Descargar Excel modificado (A)",
+                    data=excel_bytes,
+                    file_name="Reporte_Stock.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+                st.rerun()
+        else:
+            st.error("No hay data_dict. Revisa Stock_Original.xlsx.")
+            st.stop()
 
 # -------------------------------------------------------------------------
-# EXPANDER PARA VER EL HISTÓRICO (B)
+# CUERPO PRINCIPAL => Edición en Hoja Principal (A)
 # -------------------------------------------------------------------------
-with st.expander("Ver Base de Datos Histórica (Excel B)", expanded=False):
-    if data_dict_b:
-        hojas_b = list(data_dict_b.keys())
-        hoja_b_sel = st.selectbox("Selecciona hoja en B:", hojas_b)
-        df_b_vista = data_dict_b[hoja_b_sel].copy()
-
-        # Ordenar por Nombre producto y NºLote si existen
-        if "Nombre producto" in df_b_vista.columns and "NºLote" in df_b_vista.columns:
-            df_b_vista.sort_values(by=["Nombre producto","NºLote"], inplace=True, ignore_index=True)
-
-        st.write("Vista de B (Histórico):")
-        st.dataframe(df_b_vista)
-
-        # Descargar la hoja actual de B
-        excel_b_mem = generar_excel_en_memoria(df_b_vista, sheet_nm=hoja_b_sel)
-        st.download_button(
-            label="Descargar hoja de Excel B",
-            data=excel_b_mem,
-            file_name="Hoja_Historico_B.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-    else:
-        st.write("No se encontró data_dict_b o está vacío.")
-
-# -------------------------------------------------------------------------
-# TU FLUJO PRINCIPAL DE EXCEL A (YA EXISTENTE)
-# -------------------------------------------------------------------------
-st.title("📦 Control de Stock Secuenciación (Excel A + Histórico B)")
+st.title("📦 Control de Stock Secuenciación - (Excel A + Histórico B)")
 
 if not data_dict:
-    st.error("No se pudo cargar la base de datos (Excel A).")
+    st.error("No se pudo cargar la base de datos.")
     st.stop()
 
 st.markdown("---")
-st.header("Edición en Hoja Principal (Excel A) y Guardado")
+st.header("Edición en Hoja Principal y Guardado (Excel A)")
 
 hojas_principales = list(data_dict.keys())
-sheet_name = st.selectbox("Selecciona la hoja a editar (A):", hojas_principales, key="main_sheet_sel")
+sheet_name = st.selectbox("Selecciona la hoja a editar:", hojas_principales, key="main_sheet_sel")
 df_main_original = data_dict[sheet_name].copy()
 df_main_original = enforce_types(df_main_original)
 
@@ -405,6 +571,7 @@ styled_df = df_for_style.style.apply(style_lote, axis=1)
 all_cols = df_for_style.columns.tolist()
 cols_to_hide = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID"]
 final_cols = [c for c in all_cols if c not in cols_to_hide]
+
 table_html = styled_df.to_html(columns=final_cols)
 
 # 3) Crear df_main final sin columnas internas
@@ -486,13 +653,12 @@ elif sel_top == "Frigorífico":
 elif sel_top == "Tª Ambiente":
     com2 = st.text_input("Comentario (opt)")
     subopc = com2.strip()
-
 if subopc:
     sitio_new = f"{sel_top} - {subopc}"
 else:
     sitio_new = sel_top
 
-# NUEVA SECCIÓN: Si se ingresó Fecha Pedida, preguntar por el pedido del grupo completo.
+# NUEVA SECCIÓN: Si se ingresó Fecha Pedida, preguntar por el pedido del grupo completo
 group_order_selected = None
 if pd.notna(fped_new):
     group_id = df_for_style.at[row_index, "GroupID"]
@@ -513,8 +679,7 @@ if pd.notna(fped_new):
         st.markdown('</div>', unsafe_allow_html=True)
 
 # -------------------------------------------------------------------------
-# Botón para Guardar Cambios (actualiza fila y grupo) en A,
-# y EJEMPLO de Añadir una línea en B
+# Botón para Guardar Cambios (actualiza fila en A) + EJEMPLO Insertar en B
 # -------------------------------------------------------------------------
 if st.button("Guardar Cambios"):
     # Si se ingresó Fecha Llegada, forzamos Fecha Pedida a NaT
@@ -537,7 +702,7 @@ if st.button("Guardar Cambios"):
     if "Sitio almacenaje" in df_main.columns:
         df_main.at[row_index, "Sitio almacenaje"] = sitio_new
 
-    # Actualización en grupo: actualizar "Fecha Pedida" para cada fila seleccionada en el multiselect
+    # Actualización en grupo: actualizar "Fecha Pedida" para cada fila seleccionada en el multiselect.
     if pd.notna(fped_new) and group_order_selected:
         for label in group_order_selected:
             try:
@@ -547,26 +712,26 @@ if st.button("Guardar Cambios"):
                 st.error(f"Error actualizando índice {label}: {e}")
 
     data_dict[sheet_name] = df_main
-
-    # GUARDAR en Excel A
     new_file = crear_nueva_version_filename()
+    # Guardamos en nueva versión A
     with pd.ExcelWriter(new_file, engine="openpyxl") as writer:
         for sht, df_sht in data_dict.items():
             ocultar = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID"]
             temp = df_sht.drop(columns=ocultar, errors="ignore")
             temp.to_excel(writer, sheet_name=sht, index=False)
+    # Guardamos en el principal A
     with pd.ExcelWriter(STOCK_FILE, engine="openpyxl") as writer:
         for sht, df_sht in data_dict.items():
             ocultar = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID"]
             temp = df_sht.drop(columns=ocultar, errors="ignore")
             temp.to_excel(writer, sheet_name=sht, index=False)
 
-    # ===== EJEMPLO: Añadir la misma entrada a B (histórico)
+    # ===== EJEMPLO: Insertar la misma entrada en B (histórico)
+    #       Ajusta si quieres que siempre se cree una nueva fila en B, o condicional
     if sheet_name not in data_dict_b:
         data_dict_b[sheet_name] = pd.DataFrame()
 
     df_b_sheet = data_dict_b[sheet_name].copy()
-    # Creamos una fila con la info esencial:
     nueva_fila_b = {
         "Ref. Saturno": df_main.at[row_index, "Ref. Saturno"] if "Ref. Saturno" in df_main.columns else 0,
         "Ref. Fisher": df_main.at[row_index, "Ref. Fisher"] if "Ref. Fisher" in df_main.columns else "",
@@ -578,25 +743,23 @@ if st.button("Guardar Cambios"):
         "Sitio almacenaje": df_main.at[row_index, "Sitio almacenaje"],
         "Uds.": df_main.at[row_index, "Uds."] if "Uds." in df_main.columns else 0,
         "Stock": df_main.at[row_index, "Stock"] if "Stock" in df_main.columns else 0,
-        "Fecha Registro B": datetime.datetime.now()  # Campo adicional
+        "Fecha Registro B": datetime.datetime.now()  # extra
     }
-    # Insertamos sin borrar nada
     df_b_sheet = pd.concat([df_b_sheet, pd.DataFrame([nueva_fila_b])], ignore_index=True)
     data_dict_b[sheet_name] = df_b_sheet
 
-    # Guardar nueva versión B
     new_file_b = crear_nueva_version_filename_b()
+    # Guardamos la nueva versión B
     with pd.ExcelWriter(new_file_b, engine="openpyxl") as writerB:
-        for sht, df_sht in data_dict_b.items():
-            df_sht.to_excel(writerB, sheet_name=sht, index=False)
-
+        for sht_b, df_sht_b in data_dict_b.items():
+            df_sht_b.to_excel(writerB, sheet_name=sht_b, index=False)
+    # Guardamos en el principal B
     with pd.ExcelWriter(STOCK_FILE_B, engine="openpyxl") as writerB:
-        for sht, df_sht in data_dict_b.items():
-            df_sht.to_excel(writerB, sheet_name=sht, index=False)
+        for sht_b, df_sht_b in data_dict_b.items():
+            df_sht_b.to_excel(writerB, sheet_name=sht_b, index=False)
     # ===== FIN EJEMPLO
 
-    st.success(f"✅ Cambios guardados en A ('{new_file}' y '{STOCK_FILE}') y B ('{new_file_b}' y '{STOCK_FILE_B}').")
-
+    st.success(f"✅ Cambios guardados en '{new_file}' y '{STOCK_FILE}' (Excel A). También en '{new_file_b}' y '{STOCK_FILE_B}' (Excel B).")
     excel_bytes = generar_excel_en_memoria(df_main, sheet_nm=sheet_name)
     st.download_button(
         label="Descargar Excel A modificado",
