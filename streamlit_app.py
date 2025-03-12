@@ -477,6 +477,7 @@ with st.expander("Reactivo Agotado (Consumido en Lab)", expanded=False):
         hojas_agotado = list(data_dict.keys())
         hoja_sel_consumo = st.selectbox("Hoja de A para consumir:", hojas_agotado, key="cons_hoja_sel")
 
+        # Cargamos df_agotado desde data_dict (versión actual en memoria)
         df_agotado = data_dict[hoja_sel_consumo].copy()
         df_agotado = enforce_types(df_agotado)
 
@@ -487,19 +488,20 @@ with st.expander("Reactivo Agotado (Consumido en Lab)", expanded=False):
         nombres_unicos = sorted(df_agotado["Nombre producto"].dropna().unique().tolist())
         nombre_sel = st.selectbox("Selecciona Nombre producto:", nombres_unicos)
 
-        # 2) Filtrar df_agotado por ese nombre
+        # 2) Filtrar por ese Nombre producto
         df_filtrado_nombre = df_agotado[df_agotado["Nombre producto"] == nombre_sel]
         if df_filtrado_nombre.empty:
-            st.warning("No hay registros con ese Nombre producto.")
+            st.warning("No hay registros con ese Nombre producto en esta hoja.")
         else:
             # 3) Seleccionar N°Lote
             if "NºLote" not in df_filtrado_nombre.columns:
                 st.error("No existe columna 'NºLote' en esta hoja.")
                 st.stop()
+
             lotes_unicos = sorted(df_filtrado_nombre["NºLote"].dropna().unique().tolist())
             lote_sel = st.selectbox("Selecciona NºLote:", lotes_unicos)
 
-            # 4) Determinar stock actual
+            # 4) Determinar stock actual para ese (Nombre, Lote)
             df_candidato = df_filtrado_nombre[df_filtrado_nombre["NºLote"] == lote_sel]
             if df_candidato.empty:
                 st.warning("No se encontró esa combinación (Nombre + Lote).")
@@ -510,11 +512,12 @@ with st.expander("Reactivo Agotado (Consumido en Lab)", expanded=False):
                 # 5) Seleccionar Uds. consumidas
                 uds_consumidas = st.number_input("Uds. consumidas", min_value=0, step=1, key="uds_consumidas")
 
+                # --- BOTÓN 1: Consumir en Lab (solo en memoria) ---
                 if st.button("Consumir en Lab"):
                     nuevo_stock = max(0, stock_c - uds_consumidas)
                     df_agotado.at[idx_c, "Stock"] = nuevo_stock
 
-                    # Si stock = 0 => vaciar columnas
+                    # Si stock=0 => vaciar las columnas
                     if nuevo_stock == 0:
                         df_agotado.at[idx_c, "NºLote"] = ""
                         df_agotado.at[idx_c, "Caducidad"] = pd.NaT
@@ -522,15 +525,18 @@ with st.expander("Reactivo Agotado (Consumido en Lab)", expanded=False):
                         df_agotado.at[idx_c, "Fecha Llegada"] = pd.NaT
                         df_agotado.at[idx_c, "Sitio almacenaje"] = ""
 
-                    st.warning(f"Consumidas {uds_consumidas} uds. Stock final => {nuevo_stock}")
-                    data_dict[hoja_sel_consumo] = df_agotado  # Actualizamos en memoria
+                    # Sobrescribimos data_dict con la nueva versión
+                    data_dict[hoja_sel_consumo] = df_agotado
 
+                    st.warning(f"Consumidas {uds_consumidas} uds. Stock final => {nuevo_stock} (en memoria)")
+
+                # --- BOTÓN 2: Guardar Cambios en Consumo Lab ---
                 if st.button("Guardar Cambios en Consumo Lab"):
-                    # GUARDAR en Excel A con la versión actual de data_dict (que ya tiene la fila vaciada)
+                    # 1) Guardar en Excel A con la versión actual de data_dict
                     new_file = crear_nueva_version_filename()
                     with pd.ExcelWriter(new_file, engine="openpyxl") as writer:
                         for sht, df_sht in data_dict.items():
-                            # Removemos columnas internas
+                            # Ocultamos columnas internas si hace falta
                             cols_internos = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID"]
                             temp = df_sht.drop(columns=cols_internos, errors="ignore")
                             temp.to_excel(writer, sheet_name=sht, index=False)
@@ -541,7 +547,7 @@ with st.expander("Reactivo Agotado (Consumido en Lab)", expanded=False):
                             temp = df_sht.drop(columns=cols_internos, errors="ignore")
                             temp.to_excel(writer, sheet_name=sht, index=False)
 
-                    # Eliminar fila en B (si coincide Nombre+Lote)
+                    # 2) En Excel B, eliminar la fila si coincide (Nombre producto, NºLote)
                     if hoja_sel_consumo in data_dict_b:
                         df_b_hoja = data_dict_b[hoja_sel_consumo].copy()
                         if "Nombre producto" in df_b_hoja.columns and "NºLote" in df_b_hoja.columns:
@@ -561,6 +567,8 @@ with st.expander("Reactivo Agotado (Consumido en Lab)", expanded=False):
                                     df_sht_b.to_excel(writer_b, sheet_name=sht_b, index=False)
 
                     st.success(f"✅ Cambios guardados en '{new_file}' y '{STOCK_FILE}'. Fila eliminada en B (si coincidía Nombre+Lote).")
+
+                    # Ofrecer descarga de la hoja A modificada
                     excel_bytes = generar_excel_en_memoria(df_agotado, sheet_nm=hoja_sel_consumo)
                     st.download_button(
                         label="Descargar Excel modificado (A)",
@@ -569,10 +577,10 @@ with st.expander("Reactivo Agotado (Consumido en Lab)", expanded=False):
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
                     st.rerun()
-
     else:
         st.error("No hay data_dict. Revisa Stock_Original.xlsx.")
         st.stop()
+
 
 # -------------------------------------------------------------------------
 # CUERPO PRINCIPAL => Edición en Hoja Principal (A)
