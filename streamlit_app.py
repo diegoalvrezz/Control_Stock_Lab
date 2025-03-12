@@ -124,6 +124,7 @@ def crear_nueva_version_filename_b():
     fecha_hora = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     return os.path.join(VERSIONS_DIR_B, f"StockB_{fecha_hora}.xlsx")
 
+
 # -------------------------------------------------------------------------
 # FUNCIONES COMUNES
 # -------------------------------------------------------------------------
@@ -159,11 +160,12 @@ def enforce_types(df: pd.DataFrame):
     return df
 
 def load_data_b():
-    """Lee todas las hojas de STOCK_FILE_B (histórico) y elimina 'Restantes'."""
+    """Lee todas las hojas de STOCK_FILE_B (histórico)."""
     if not os.path.exists(STOCK_FILE_B):
         return {}
     try:
         data_b = pd.read_excel(STOCK_FILE_B, sheet_name=None, engine="openpyxl")
+        # Elimina 'Restantes' si existiese
         for shtb, df_sheet_b in data_b.items():
             if "Restantes" in df_sheet_b.columns:
                 df_sheet_b.drop(columns=["Restantes"], inplace=True, errors="ignore")
@@ -278,6 +280,7 @@ def style_lote(row):
         idx = row.index.get_loc("Nombre producto")
         styles[idx] += "; font-weight:bold"
     return styles
+
 
 st.markdown("""
     <style>
@@ -520,28 +523,28 @@ with st.expander("Reactivo Agotado (Consumido en Lab)", expanded=False):
                         df_agotado.at[idx_c, "Sitio almacenaje"] = ""
 
                     st.warning(f"Consumidas {uds_consumidas} uds. Stock final => {nuevo_stock}")
-                    data_dict[hoja_sel_consumo] = df_agotado
+                    data_dict[hoja_sel_consumo] = df_agotado  # Actualizamos en memoria
 
-                # 6) Botón Guardar Cambios => actualiza Excel A y elimina fila en B
                 if st.button("Guardar Cambios en Consumo Lab"):
-                    # a) Guardar en Excel A
+                    # GUARDAR en Excel A con la versión actual de data_dict (que ya tiene la fila vaciada)
                     new_file = crear_nueva_version_filename()
                     with pd.ExcelWriter(new_file, engine="openpyxl") as writer:
                         for sht, df_sht in data_dict.items():
+                            # Removemos columnas internas
                             cols_internos = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID"]
                             temp = df_sht.drop(columns=cols_internos, errors="ignore")
                             temp.to_excel(writer, sheet_name=sht, index=False)
+
                     with pd.ExcelWriter(STOCK_FILE, engine="openpyxl") as writer:
                         for sht, df_sht in data_dict.items():
                             cols_internos = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID"]
                             temp = df_sht.drop(columns=cols_internos, errors="ignore")
                             temp.to_excel(writer, sheet_name=sht, index=False)
 
-                    # b) Eliminar fila en B (si hoja_sel_consumo existe en B)
+                    # Eliminar fila en B (si coincide Nombre+Lote)
                     if hoja_sel_consumo in data_dict_b:
                         df_b_hoja = data_dict_b[hoja_sel_consumo].copy()
                         if "Nombre producto" in df_b_hoja.columns and "NºLote" in df_b_hoja.columns:
-                            # Eliminamos sólo si coincide EXACTO Nombre + Lote
                             df_b_hoja = df_b_hoja[~(
                                 (df_b_hoja["Nombre producto"] == nombre_sel) &
                                 (df_b_hoja["NºLote"] == lote_sel)
@@ -757,7 +760,6 @@ if st.button("Guardar Cambios"):
             temp.to_excel(writer, sheet_name=sht, index=False)
 
     # ===== EJEMPLO: Insertar la misma entrada en B (histórico)
-    # (Ajusta si siempre quieres crear nueva fila en B u otra lógica)
     if sheet_name not in data_dict_b:
         data_dict_b[sheet_name] = pd.DataFrame()
 
