@@ -53,12 +53,6 @@ if st.button("Cerrar sesión"):
     authenticator.logout()
     st.rerun()
 
-
-
-
-
-
-
 # ---------------------------
 # El resto de tu aplicación original desde aquí
 # ---------------------------
@@ -408,12 +402,6 @@ with st.expander("➕ Agregar un nuevo lote"):
     # 2) Leemos el DataFrame de esa hoja
     df_target = data_dict[hoja_destino].copy()
     
-    # --- Para el Producto y referencias ---
-    # Aquí tienes varias opciones, por ejemplo:
-    # - Permitir escribir manualmente "Nombre producto"
-    # - Seleccionar un producto existente
-    # - Ambas cosas (combinar un selectbox + text_input)
-    
     # Opción A: Seleccionar un producto ya existente:
     productos_existentes = df_target["Nombre producto"].dropna().unique().tolist()
     producto_nuevo = st.selectbox(
@@ -494,7 +482,6 @@ with st.expander("➕ Agregar un nuevo lote"):
         
         # F) Refrescamos la app para que se vea el nuevo registro
         st.rerun()
-
 
 
 hojas_principales = list(data_dict.keys())
@@ -581,7 +568,7 @@ with colD:
     st.write("")
     st.write("")
     if st.button("Refrescar Página"):
-        st.experimental_rerun()
+        st.rerun()
 
 fped_new = None
 if fped_date is not None:
@@ -650,7 +637,7 @@ if st.button("Guardar Cambios"):
             st.info(f"Añadidas {uds_actual} uds al stock => {stock_actual + uds_actual}")
 
     if "NºLote" in df_main.columns:
-        df_main.at[row_index, "NºLote"] = int(lote_new)  # Casting ya se hace aquí
+        df_main.at[row_index, "NºLote"] = int(lote_new)
     if "Caducidad" in df_main.columns:
         df_main.at[row_index, "Caducidad"] = cad_new if pd.notna(cad_new) else pd.NaT
     if "Fecha Pedida" in df_main.columns:
@@ -660,7 +647,7 @@ if st.button("Guardar Cambios"):
     if "Sitio almacenaje" in df_main.columns:
         df_main.at[row_index, "Sitio almacenaje"] = sitio_new
 
-    # Actualización en grupo: actualizar "Fecha Pedida" para cada fila seleccionada en el multiselect.
+    # Actualización en grupo: actualizar "Fecha Pedida" para cada fila seleccionada en el multiselect
     if pd.notna(fped_new) and group_order_selected:
         for label in group_order_selected:
             try:
