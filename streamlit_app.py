@@ -279,15 +279,24 @@ def style_lote(row):
     return styles
 
 
+st.markdown("""
+    <style>
+    .big-select select {
+        font-size: 18px;
+        height: auto;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
 # -------------------------------------------------------------------------
-# GESTIÓN DE VERSIONES (A) - la tuya original
+# SIDEBAR => GESTIONAR VERSIONES DE A
 # -------------------------------------------------------------------------
-with st.sidebar.expander("🔎 Ver / Gestionar versiones guardadas", expanded=False):
+with st.sidebar.expander("🔎 Ver / Gestionar versiones A (Stock_Original)", expanded=False):
     if data_dict:
         files = sorted(os.listdir(VERSIONS_DIR))
         versions_no_original = [f for f in files if f != "Stock_Original.xlsx"]
         if versions_no_original:
-            version_sel = st.selectbox("Selecciona versión:", versions_no_original)
+            version_sel = st.selectbox("Selecciona versión A:", versions_no_original)
             confirm_delete = False
 
             if version_sel:
@@ -304,7 +313,7 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones guardadas", expanded=Fa
                 if st.checkbox(f"Confirmar eliminación de '{version_sel}'"):
                     confirm_delete = True
 
-                if st.button("Eliminar esta versión"):
+                if st.button("Eliminar esta versión A"):
                     if confirm_delete:
                         try:
                             os.remove(file_path)
@@ -315,9 +324,9 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones guardadas", expanded=Fa
                     else:
                         st.error("Marca la casilla para confirmar la eliminación.")
         else:
-            st.write("No hay versiones guardadas (excepto la original).")
+            st.write("No hay versiones guardadas de A (excepto la original).")
 
-        if st.button("Eliminar TODAS las versiones (excepto original)"):
+        if st.button("Eliminar TODAS las versiones A (excepto original)"):
             for f in versions_no_original:
                 try:
                     os.remove(os.path.join(VERSIONS_DIR, f))
@@ -326,7 +335,7 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones guardadas", expanded=Fa
             st.info("Todas las versiones (excepto la original) eliminadas.")
             st.rerun()
 
-        if st.button("Eliminar TODAS las versiones excepto la última y la original"):
+        if st.button("Eliminar TODAS las versiones A excepto la última y la original"):
             if len(versions_no_original) > 1:
                 sorted_vers = sorted(versions_no_original)
                 last_version = sorted_vers[-1]
@@ -341,22 +350,21 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones guardadas", expanded=Fa
             else:
                 st.write("Solo hay una versión o ninguna versión, no se elimina nada más.")
 
-        # --- Botón de Limpiar Base de Datos ---
-        limpiar_confirmado = st.checkbox("Confirmar limpieza de la base de datos", key="confirmar_limpiar")
-        if st.button("Limpiar Base de Datos") and limpiar_confirmado:
+        # Botón de Limpiar Base de Datos A
+        if st.button("Limpiar Base de Datos A"):
             original_path = os.path.join(VERSIONS_DIR, "Stock_Original.xlsx")
             if os.path.exists(original_path):
                 shutil.copy(original_path, STOCK_FILE)
-                st.success("✅ Base de datos restaurada al estado original.")
+                st.success("Base de datos A restaurada al estado original.")
                 st.rerun()
             else:
-                st.error("❌ No se encontró la copia original en 'versions/Stock_Original.xlsx'.")
+                st.error("No se encontró la copia original de A.")
     else:
         st.error("No hay data_dict. Verifica Stock_Original.xlsx.")
         st.stop()
 
 # -------------------------------------------------------------------------
-# GESTIÓN DE VERSIONES (B) + ver base B (histórico)
+# SIDEBAR => GESTIONAR VERSIONES B
 # -------------------------------------------------------------------------
 with st.sidebar.expander("🔎 Ver / Gestionar versiones B (Histórico)", expanded=False):
     files_b = sorted(os.listdir(VERSIONS_DIR_B))
@@ -416,7 +424,7 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones B (Histórico)", expand
         else:
             st.write("Solo hay una versión o ninguna versión, no se elimina nada más.")
 
-    # Limpiar Base de Datos B
+    # Botón de Limpiar Base de Datos B
     if st.button("Limpiar Base de Datos B"):
         if os.path.exists(ORIGINAL_FILE_B):
             shutil.copy(ORIGINAL_FILE_B, STOCK_FILE_B)
@@ -425,30 +433,31 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones B (Histórico)", expand
         else:
             st.error("No se encontró la copia original de B.")
 
-    # Expander de Ver Base de Datos Histórica
-    with st.expander("Ver Base de Datos Histórica (Excel B)", expanded=False):
-        if data_dict_b:
-            hojas_b = list(data_dict_b.keys())
-            hoja_b_sel = st.selectbox("Selecciona hoja en B:", hojas_b)
-            df_b_vista = data_dict_b[hoja_b_sel].copy()
 
-            # Ordenar si existen 'Nombre producto' y 'NºLote'
-            if "Nombre producto" in df_b_vista.columns and "NºLote" in df_b_vista.columns:
-                df_b_vista.sort_values(by=["Nombre producto","NºLote"], inplace=True, ignore_index=True)
+# -------------------------------------------------------------------------
+# SIDEBAR => Ver Base de Datos Histórica B (SIN anidarlo)
+# -------------------------------------------------------------------------
+with st.sidebar.expander("Ver Base de Datos Histórica (Excel B)", expanded=False):
+    if data_dict_b:
+        hojas_b = list(data_dict_b.keys())
+        hoja_b_sel = st.selectbox("Selecciona hoja en B:", hojas_b)
+        df_b_vista = data_dict_b[hoja_b_sel].copy()
+        # Ordenar si existen
+        if "Nombre producto" in df_b_vista.columns and "NºLote" in df_b_vista.columns:
+            df_b_vista.sort_values(by=["Nombre producto","NºLote"], inplace=True, ignore_index=True)
 
-            st.write("Vista de B (Histórico):")
-            st.dataframe(df_b_vista)
+        st.write("Vista de B (Histórico):")
+        st.dataframe(df_b_vista)
 
-            excel_b_mem = generar_excel_en_memoria(df_b_vista, sheet_nm=hoja_b_sel)
-            st.download_button(
-                label="Descargar hoja de Excel B",
-                data=excel_b_mem,
-                file_name="Hoja_Historico_B.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-        else:
-            st.write("No se encontró data_dict_b o está vacío.")
-
+        excel_b_mem = generar_excel_en_memoria(df_b_vista, sheet_nm=hoja_b_sel)
+        st.download_button(
+            label="Descargar hoja de Excel B",
+            data=excel_b_mem,
+            file_name="Hoja_Historico_B.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    else:
+        st.write("No se encontró data_dict_b o está vacío.")
 
 # -------------------------------------------------------------------------
 # REACTIVO AGOTADO (Consumido en Lab):
@@ -456,7 +465,7 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones B (Histórico)", expand
 #  - Elige Nombre producto
 #  - Elige NºLote
 #  - Quita 1 (o X) del stock en A
-#  - Elimina la fila en B donde coincidan (Nombre producto, NºLote)
+#  - Elimina la fila en B
 # -------------------------------------------------------------------------
 with st.expander("Reactivo Agotado (Consumido en Lab)", expanded=False):
     if data_dict:
@@ -474,7 +483,7 @@ with st.expander("Reactivo Agotado (Consumido en Lab)", expanded=False):
         nombres_unicos = sorted(df_agotado["Nombre producto"].dropna().unique().tolist())
         nombre_sel = st.selectbox("Selecciona Nombre producto:", nombres_unicos)
 
-        # 2) Filtrar df_agotado por ese nombre y obtener N°Lotes
+        # 2) Filtrar df_agotado por ese nombre
         df_filtrado_nombre = df_agotado[df_agotado["Nombre producto"] == nombre_sel]
         if df_filtrado_nombre.empty:
             st.warning("No hay registros con ese Nombre producto.")
@@ -486,12 +495,11 @@ with st.expander("Reactivo Agotado (Consumido en Lab)", expanded=False):
             lotes_unicos = sorted(df_filtrado_nombre["NºLote"].dropna().unique().tolist())
             lote_sel = st.selectbox("Selecciona NºLote:", lotes_unicos)
 
-            # 4) Determinar stock actual (encontrar fila(s) con ese nombre y lote)
+            # 4) Determinar stock actual
             df_candidato = df_filtrado_nombre[df_filtrado_nombre["NºLote"] == lote_sel]
             if df_candidato.empty:
                 st.warning("No se encontró esa combinación (Nombre + Lote).")
             else:
-                # Asumimos que si hay varias filas, se toma la primera
                 idx_c = df_candidato.index[0]
                 stock_c = df_agotado.at[idx_c, "Stock"] if "Stock" in df_agotado.columns else 0
 
@@ -519,8 +527,7 @@ with st.expander("Reactivo Agotado (Consumido en Lab)", expanded=False):
                             temp = df_sht.drop(columns=cols_internos, errors="ignore")
                             temp.to_excel(writer, sheet_name=sht, index=False)
 
-                    # b) Eliminar fila en B
-                    #    Hoja con el mismo nombre (si existe) + coincide Nombre producto, NºLote
+                    # b) Eliminar fila en B (si existe)
                     if hoja_sel_consumo in data_dict_b:
                         df_b_hoja = data_dict_b[hoja_sel_consumo].copy()
                         if "Nombre producto" in df_b_hoja.columns and "NºLote" in df_b_hoja.columns:
@@ -550,7 +557,6 @@ with st.expander("Reactivo Agotado (Consumido en Lab)", expanded=False):
     else:
         st.error("No hay data_dict. Revisa Stock_Original.xlsx.")
         st.stop()
-
 
 # -------------------------------------------------------------------------
 # CUERPO PRINCIPAL => Edición en Hoja Principal (A)
