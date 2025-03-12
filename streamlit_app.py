@@ -547,22 +547,36 @@ stock_actual = get_val("Stock", 0)
 
 colA, colB, colC, colD = st.columns([1, 1, 1, 1])
 with colA:
-    lote_new = st.number_input("Nº de Lote", value=int(lote_actual), step=1)
-    cad_new = st.date_input("Caducidad", value=caducidad_actual if pd.notna(caducidad_actual) else None)
+    lote_new = st.number_input("Nº de Lote", value=int(lote_actual), step=1, key="lote_new_key")
+    cad_new = st.date_input(
+        "Caducidad",
+        value=caducidad_actual if pd.notna(caducidad_actual) else None,
+        key="cad_new_key"
+    )
+
 with colB:
-    fped_date = st.date_input("Fecha Pedida (fecha)",
-                              value=fecha_pedida_actual.date() if pd.notna(fecha_pedida_actual) else None,
-                              key="fped_date_main")
-    fped_time = st.time_input("Hora Pedida",
-                              value=fecha_pedida_actual.time() if pd.notna(fecha_pedida_actual) else datetime.time(0, 0),
-                              key="fped_time_main")
+    fped_date = st.date_input(
+        "Fecha Pedida (fecha)",
+        value=fecha_pedida_actual.date() if pd.notna(fecha_pedida_actual) else None,
+        key="fped_date_main"
+    )
+    fped_time = st.time_input(
+        "Hora Pedida",
+        value=fecha_pedida_actual.time() if pd.notna(fecha_pedida_actual) else datetime.time(0, 0),
+        key="fped_time_main"
+    )
+
 with colC:
-    flleg_date = st.date_input("Fecha Llegada (fecha)",
-                               value=fecha_llegada_actual.date() if pd.notna(fecha_llegada_actual) else None,
-                               key="flleg_date_main")
-    flleg_time = st.time_input("Hora Llegada",
-                               value=fecha_llegada_actual.time() if pd.notna(fecha_llegada_actual) else datetime.time(0, 0),
-                               key="flleg_time_main")
+    flleg_date = st.date_input(
+        "Fecha Llegada (fecha)",
+        value=fecha_llegada_actual.date() if pd.notna(fecha_llegada_actual) else None,
+        key="flleg_date_main"
+    )
+    flleg_time = st.time_input(
+        "Hora Llegada",
+        value=fecha_llegada_actual.time() if pd.notna(fecha_llegada_actual) else datetime.time(0, 0),
+        key="flleg_time_main"
+    )
 with colD:
     st.write("")
     st.write("")
