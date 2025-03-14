@@ -463,13 +463,13 @@ with st.sidebar.expander("Ver Base de Datos Histórica (Excel B)", expanded=Fals
 # -------------------------------------------------------------------------
 # REACTIVO AGOTADO (Consumido en Lab) => st.session_state
 # -------------------------------------------------------------------------
-st.title("📦 Reactivo Agotado (Consumido en Lab)")
+st.title("📦 Control Stock Lab. Patología Molécular")
 
 if not st.session_state["data_dict"]:
     st.error("No se pudo cargar la base de datos (A).")
     st.stop()
 
-with st.expander("Consumir Reactivo en Lab", expanded=False):
+with st.expander("Informar Reactivo Agotado", expanded=False):
     hojas_a = list(st.session_state["data_dict"].keys())
     hoja_sel = st.selectbox("Hoja A a consumir:", hojas_a)
     
@@ -547,14 +547,14 @@ with st.expander("Consumir Reactivo en Lab", expanded=False):
 # -------------------------------------------------------------------------
 # CUERPO PRINCIPAL => Edición en Hoja Principal (A)
 # -------------------------------------------------------------------------
-st.header("Edición en Hoja Principal y Guardado (Excel A)")
+st.header("Gestión del Stock")
 
 if not st.session_state["data_dict"]:
     st.error("No se pudo cargar la base de datos (A).")
     st.stop()
 
 hojas_principales = list(st.session_state["data_dict"].keys())
-sheet_name = st.selectbox("Selecciona la hoja a editar:", hojas_principales, key="main_sheet_sel")
+sheet_name = st.selectbox("Selecciona el panel:", hojas_principales, key="main_sheet_sel")
 df_main_original = st.session_state["data_dict"][sheet_name].copy()
 df_main_original = enforce_types(df_main_original)
 
@@ -574,7 +574,7 @@ table_html = styled_df.to_html(columns=final_cols)
 df_main = df_for_style.copy()
 df_main.drop(columns=cols_to_hide, inplace=True, errors="ignore")
 
-st.write("#### Vista de la Hoja (con columna 'Alarma' y sin columnas internas)")
+st.write(f"#### Stock del Panel {sheet_name}")
 st.write(table_html, unsafe_allow_html=True)
 
 if "Nombre producto" in df_main.columns and "Ref. Fisher" in df_main.columns:
