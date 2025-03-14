@@ -434,27 +434,7 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones Historial (B)", expande
         st.write("No hay data_dict_b. Verifica Stock_Historico.xlsx.")
 
 
-# -------------------------------------------------------------------------
-# SIDEBAR => Ver Base de Datos Historial (B)
-# -------------------------------------------------------------------------
-with st.sidebar.expander("Ver Base de Datos Historial (B)", expanded=False):
-    if st.session_state["data_dict_b"]:
-        hojas_b = list(st.session_state["data_dict_b"].keys())
-        hoja_b_sel = st.selectbox("Selecciona hoja en B:", hojas_b)
-        df_b_vista = st.session_state["data_dict_b"][hoja_b_sel].copy()
-        if "Nombre producto" in df_b_vista.columns and "NºLote" in df_b_vista.columns:
-            df_b_vista.sort_values(by=["Nombre producto","NºLote"], inplace=True, ignore_index=True)
-        st.write("Vista de B (Histórico):")
-        st.dataframe(df_b_vista)
-        excel_b_mem = generar_excel_en_memoria(df_b_vista, sheet_nm=hoja_b_sel)
-        st.download_button(
-            label="Descargar hoja de Excel B",
-            data=excel_b_mem,
-            file_name="Hoja_Historico_B.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-    else:
-        st.write("No se encontró data_dict_b o está vacío.")
+
 
 
 # -------------------------------------------------------------------------
@@ -623,6 +603,7 @@ with tabs[2]:
         st.success("✅ Cambios guardados en Hoja A y B (si coincidía).")
         st.rerun()
 
+st.divider()
 
 # -------------------------------------------------------------------------
 # CUERPO PRINCIPAL => Edición en Hoja Principal (A)
