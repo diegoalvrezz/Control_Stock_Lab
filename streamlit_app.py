@@ -333,6 +333,7 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones Stock (A)", expanded=Fa
                 except:
                     pass
             st.info("Todas las versiones (excepto la original) eliminadas.")
+            time.sleep(2)
             st.rerun()
 
         if st.button("Eliminar TODAS las versiones A excepto la última y la original"):
