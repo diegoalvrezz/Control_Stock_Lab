@@ -13,6 +13,64 @@ import time
 st.set_page_config(page_title="Control de Stock con Lotes", layout="centered")
 st.title("🔬 Control Stock Lab. Patología Molécular")
 
+LOTS_DATA = {
+    "FOCUS": {
+        "Panel Oncomine Focus Library Assay Chef Ready": [
+            "Primers DNA", "Primers RNA", "Reagents DL8", "Chef supplies (plásticos)",
+            "Placas", "Solutions DL8"
+        ],
+        "Ion 510/520/530 kit-Chef (TEMPLADO)": [
+            "Chef Reagents", "Chef Solutions", "Chef supplies (plásticos)",
+            "Solutions Reagent S5", "Botellas S5"
+        ],
+        "Recover All TM Multi-Sample RNA/DNA Isolation workflow-Kit": [
+            "Kit extracción DNA/RNA", "RecoverAll TM kit (Dnase, protease,…)",
+            "H2O RNA free", "Tubos fondo cónico", "Superscript VILO cDNA Syntheis Kit",
+            "Qubit 1x dsDNA HS Assay kit (100 reactions)"
+        ],
+        "Chip secuenciación liberación de protones 6 millones de lecturas": []
+    },
+    "OCA": {
+        "Panel OCA Library Assay Chef Ready": [
+            "Primers DNA", "Primers RNA", "Reagents DL8", "Chef supplies (plásticos)",
+            "Placas", "Solutions DL8"
+        ],
+        "kit-Chef (TEMPLADO)": [
+            "Ion 540 TM Chef Reagents", "Chef Solutions", "Chef supplies (plásticos)",
+            "Solutions Reagent S5", "Botellas S5"
+        ],
+        "Chip secuenciación liberación de protones 6 millones de lecturas": [
+            "Ion 540 TM Chip Kit"
+        ],
+        "Recover All TM Multi-Sample RNA/DNA Isolation workflow-Kit": [
+            "Kit extracción DNA/RNA", "RecoverAll TM kit (Dnase, protease,…)",
+            "H2O RNA free", "Tubos fondo cónico"
+        ]
+    },
+    "OCA PLUS": {
+        "Panel OCA-PLUS Library Assay Chef Ready": [
+            "Primers DNA", "Uracil-DNA Glycosylase heat-labile", "Reagents DL8",
+            "Chef supplies (plásticos)", "Placas", "Solutions DL8"
+        ],
+        "kit-Chef (TEMPLADO)": [
+            "Ion 550 TM Chef Reagents", "Chef Solutions", "Chef Supplies (plásticos)",
+            "Solutions Reagent S5", "Botellas S5", "Chip secuenciación Ion 550 TM Chip Kit"
+        ],
+        "Recover All TM Multi-Sample RNA/DNA Isolation workflow-Kit": [
+            "Kit extracción DNA/RNA", "RecoverAll TM kit (Dnase, protease,…)",
+            "H2O RNA free", "Tubos fondo cónico"
+        ]
+    }
+}
+
+# Colores para asignar a grupos (si los usas en build_group_info_by_ref)
+# Puedes tener tu propia lista. Aquí va una de ejemplo.
+colors = [
+    "#FED7D7", "#FEE2E2", "#FFEDD5", "#FEF9C3", "#D9F99D",
+    "#CFFAFE", "#E0E7FF", "#FBCFE8", "#F9A8D4", "#E9D5FF",
+    "#FFD700", "#F0FFF0", "#D1FAE5", "#BAFEE2", "#A7F3D0", "#FFEC99"
+]
+
 def build_group_info_by_ref(df: pd.DataFrame, panel_default: str = None) -> pd.DataFrame:
     """
     Agrupa registros por 'Ref. Saturno', les asigna color y marca
@@ -446,7 +504,7 @@ def guardar_nueva_version_A():
     llamas a esta función para crear la ruta y guardar el Excel.
     """
     new_file = create_dated_version_filename(VERSIONS_DIR, prefix="Stock")
-    # TODO: Guardar tu DF principal en new_file
+    #TODO: Guardar tu DF principal en new_file
     # with pd.ExcelWriter(new_file, engine="openpyxl") as writer:
     #     df_main.to_excel(writer, index=False, sheet_name="HojaA")
     st.success(f"Archivo guardado en {new_file}")
