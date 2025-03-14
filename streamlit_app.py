@@ -8,6 +8,7 @@ import os
 from io import BytesIO
 import itertools
 import openpyxl
+import time
 
 st.set_page_config(page_title="Control de Stock con Lotes", layout="centered")
 st.title("🔬 Control Stock Lab. Patología Molécular")
@@ -316,6 +317,7 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones Stock (A)", expanded=Fa
                         try:
                             os.remove(file_path)
                             st.warning(f"Versión '{version_sel}' eliminada.")
+                            time.sleep(2)
                             st.rerun()
                         except:
                             st.error("Error al intentar eliminar la versión.")
