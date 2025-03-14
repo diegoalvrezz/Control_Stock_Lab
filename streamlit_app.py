@@ -437,8 +437,8 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones Historial (B)", expande
 
 
 st.markdown("### Información")
-st.write("Recuerde que en la barra lateral puede gestionar las versiones. Despliegue para consultarlo.")
-
+st.write("← Recuerde que en la barra lateral puede gestionar las versiones. Despliegue para consultarlo.")
+st.divider()
 
 # -------------------------------------------------------------------------
 # CUERPO PRINCIPAL => Edición en Hoja Principal (A)
