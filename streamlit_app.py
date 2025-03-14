@@ -523,7 +523,7 @@ with colB:
     fped_date = st.date_input("Fecha Pedida",
                               value=fecha_pedida_actual.date() if pd.notna(fecha_pedida_actual) else None,
                               key="fped_date_main")
-    fped_time = st.time_input("Hora Pedidab (opcional)",
+    fped_time = st.time_input("Hora Pedida (opcional)",
                               value=fecha_pedida_actual.time() if pd.notna(fecha_pedida_actual) else datetime.time(0,0),
                               key="fped_time_main")
 with colC:
