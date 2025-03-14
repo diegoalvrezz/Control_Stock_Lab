@@ -3,4 +3,3 @@ streamlit-authenticator
 pandas
 numpy
 openpyxl
-time
