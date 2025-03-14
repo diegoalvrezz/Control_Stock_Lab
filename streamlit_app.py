@@ -463,7 +463,7 @@ with st.sidebar.expander("Ver Base de Datos Histórica (Excel B)", expanded=Fals
 # -------------------------------------------------------------------------
 # REACTIVO AGOTADO (Consumido en Lab) => st.session_state
 # -------------------------------------------------------------------------
-st.title("📦 Control Stock Lab. Patología Molécular")
+st.title("🔬 Control Stock Lab. Patología Molécular")
 
 if not st.session_state["data_dict"]:
     st.error("No se pudo cargar la base de datos (A).")
@@ -602,14 +602,14 @@ with colA:
 
     cad_new = st.date_input("Caducidad", value=caducidad_actual if pd.notna(caducidad_actual) else None)
 with colB:
-    fped_date = st.date_input("Fecha Pedida (fecha)",
+    fped_date = st.date_input("Fecha Pedida",
                               value=fecha_pedida_actual.date() if pd.notna(fecha_pedida_actual) else None,
                               key="fped_date_main")
     fped_time = st.time_input("Hora Pedida",
                               value=fecha_pedida_actual.time() if pd.notna(fecha_pedida_actual) else datetime.time(0,0),
                               key="fped_time_main")
 with colC:
-    flleg_date = st.date_input("Fecha Llegada (fecha)",
+    flleg_date = st.date_input("Fecha Llegada",
                                value=fecha_llegada_actual.date() if pd.notna(fecha_llegada_actual) else None,
                                key="flleg_date_main")
     flleg_time = st.time_input("Hora Llegada",
@@ -630,7 +630,7 @@ if flleg_date is not None:
     dt_lleg = datetime.datetime.combine(flleg_date, flleg_time)
     flleg_new = pd.to_datetime(dt_lleg)
 
-st.write("Sitio de Almacenaje")
+st.write("#### Lugar de Almacenaje")
 opciones_sitio = ["Congelador 1","Congelador 2","Frigorífico","Tª Ambiente"]
 sitio_p = sitio_almacenaje_actual.split(" - ")[0] if " - " in sitio_almacenaje_actual else sitio_almacenaje_actual
 if sitio_p not in opciones_sitio:
