@@ -437,173 +437,6 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones Historial (B)", expande
 
 
 
-# -------------------------------------------------------------------------
-# AGRUPAR EN TABS: Ver Base de Datos Historial (B), Filtrar Reactivos, e Informar Reactivo Agotado
-# -------------------------------------------------------------------------
-tabs = st.tabs(["Ver Base de Datos Historial (B)", "Filtrar Reactivos Limitantes/Compartidos", "Informar Reactivo Agotado"])
-
-with tabs[0]:
-    st.write("### Vista de la Base de Datos Historial (B)")
-    if st.session_state["data_dict_b"]:
-        hojas_b = list(st.session_state["data_dict_b"].keys())
-        hoja_b_sel = st.selectbox("Selecciona hoja en B (vista):", hojas_b, key="vista_tab")
-        df_b_vista = st.session_state["data_dict_b"][hoja_b_sel].copy()
-        if "Nombre producto" in df_b_vista.columns and "NºLote" in df_b_vista.columns:
-            df_b_vista.sort_values(by=["Nombre producto","NºLote"], inplace=True, ignore_index=True)
-        st.dataframe(df_b_vista)
-        excel_b_mem = generar_excel_en_memoria(df_b_vista, sheet_nm=hoja_b_sel)
-        st.download_button(
-            label="Descargar hoja de Excel B (vista)",
-            data=excel_b_mem,
-            file_name="Hoja_Historico_B_vista.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-    else:
-        st.write("No hay datos en la Base Historial (B).")
-
-with tabs[1]:
-    st.write("### Filtrar Reactivos Limitantes/Compartidos")
-    # 1) Definimos el set de referencias "limitantes"
-    limitantes_set = {
-        "A42006","A42007","A27762","A34018","A33638","A33639","A27758","A27765","A4517",
-        "A3410","A34537","A45617","A34540","A36410","A29025","A29027","A29026","A27754",
-        "11754050","11766050"
-    }
-    if not st.session_state["data_dict_b"]:
-        st.warning("No hay datos en base B. Verifica que Stock_Historico.xlsx tenga contenido.")
-        st.stop()
-    all_rows_b = []
-    for sheet_b, df_b_sht in st.session_state["data_dict_b"].items():
-        temp_df = df_b_sht.copy()
-        temp_df["(Hoja B)"] = sheet_b  
-        all_rows_b.append(temp_df)
-    df_b_combined = pd.concat(all_rows_b, ignore_index=True)
-    df_b_combined = enforce_types(df_b_combined)
-    refs_info = []
-    for idx, row in df_b_combined.iterrows():
-        ref = str(row["Ref. Fisher"]) if "Ref. Fisher" in row else ""
-        nom = str(row["Nombre producto"]) if "Nombre producto" in row else ""
-        hoja = str(row["(Hoja B)"]) if "(Hoja B)" in row else "??"
-        if ref or nom:
-            refs_info.append((ref.strip(), nom.strip(), hoja.strip()))
-    unique_triples = set(refs_info)
-    limitantes_list = []
-    compartidos_list = []
-    for (ref_fish, nom_prod, hoja_orig) in unique_triples:
-        if ref_fish.strip().upper() == "A":
-            continue
-        if ref_fish in limitantes_set:
-            limitantes_list.append((ref_fish, nom_prod, hoja_orig))
-        else:
-            compartidos_list.append((ref_fish, nom_prod, hoja_orig))
-    grupo_elegido = st.radio("¿Qué grupo de reactivos quieres filtrar?", ("limitante", "compartido"), key="grupo_filtrar")
-    if grupo_elegido == "limitante":
-        op_list = limitantes_list
-    else:
-        op_list = compartidos_list
-    if not op_list:
-        st.warning(f"No se encontraron reactivos en la categoría '{grupo_elegido}' dentro de la base B.")
-        st.stop()
-    def display_label(tup):
-        lab = f"{tup[0]} - {tup[1]}"
-        if tup[2]:
-            lab += f" ({tup[2]})"
-        return lab
-    seleccion = st.selectbox(
-        "Selecciona Reactivo",
-        [display_label(t) for t in op_list],
-        key="select_b_filtrado_tab"
-    )
-    if st.button("Buscar en Base Historial", key="buscar_filtrado"):
-        index_sel = [display_label(t) for t in op_list].index(seleccion)
-        ref_sel, nom_sel, hoja_sel_b = op_list[index_sel]
-        df_filtrado = df_b_combined[
-            (df_b_combined["Ref. Fisher"].astype(str).str.strip() == ref_sel)
-        ].copy()
-        if "Caducidad" in df_filtrado.columns:
-            df_filtrado = df_filtrado.dropna(subset=["Caducidad"])
-        if df_filtrado.empty:
-            st.warning("No se encontraron reactivos (en B) con esos parámetros.")
-        else:
-            if "Caducidad" in df_filtrado.columns:
-                df_filtrado.sort_values(by="Caducidad", inplace=True, ignore_index=True)
-            if ref_sel == "A27754":
-                st.info("Nota: Esta referencia se comparte entre OCA y FOCUS.")
-            st.dataframe(df_filtrado)
-            excel_filtro = generar_excel_en_memoria(df_filtrado, "Filtro_B")
-            st.download_button(
-                label="Descargar resultados filtrados en Excel",
-                data=excel_filtro,
-                file_name="Filtro_B.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-
-with tabs[2]:
-    st.write("### Informar Reactivo Agotado")
-    if not st.session_state["data_dict"]:
-        st.error("No se pudo cargar la base de datos (A).")
-        st.stop()
-    hojas_a = list(st.session_state["data_dict"].keys())
-    hoja_sel = st.selectbox("Hoja A a consumir:", hojas_a, key="agotado_hoja")
-    df_a = st.session_state["data_dict"][hoja_sel].copy()
-    df_a = enforce_types(df_a)
-    if "Nombre producto" not in df_a.columns:
-        st.error("No existe columna 'Nombre producto' en esta hoja A.")
-        st.stop()
-    nombres_unicos = sorted(df_a["Nombre producto"].dropna().unique())
-    nombre_sel = st.selectbox("Nombre producto en A:", nombres_unicos, key="agotado_nombre")
-    df_cand = df_a[df_a["Nombre producto"]==nombre_sel]
-    if df_cand.empty:
-        st.warning("No se encontró ese nombre en esta hoja A.")
-    else:
-        idx_c = df_cand.index[0]
-        stock_c = df_a.at[idx_c,"Stock"] if "Stock" in df_a.columns else 0
-        uds_consumir = st.number_input("Uds. a consumir en A:", min_value=0, step=1, key="agotado_uds")
-        if st.button("Consumir en Lab (memoria)", key="agotado_consumir"):
-            nuevo_stock = max(0, stock_c - uds_consumir)
-            df_a.at[idx_c,"Stock"] = nuevo_stock
-            if nuevo_stock==0:
-                for col_vaciar in ["NºLote","Caducidad","Fecha Pedida","Fecha Llegada","Sitio almacenaje"]:
-                    if col_vaciar in df_a.columns:
-                        if col_vaciar in ["Caducidad","Fecha Pedida","Fecha Llegada"]:
-                            df_a.at[idx_c, col_vaciar] = pd.NaT
-                        else:
-                            df_a.at[idx_c, col_vaciar] = ""
-            st.session_state["data_dict"][hoja_sel] = df_a
-            st.warning(f"Consumidas {uds_consumir} uds. Stock final => {nuevo_stock}. (Sólo en memoria).")
-    st.write("**Eliminar en B** => introduce el Lote exacto. Si coincide Nombre+Lote, se borra de B.")
-    lote_b = st.number_input("Nº de Lote (en B)", min_value=0, step=1, key="agotado_lote")
-    if st.button("Guardar Cambios en Consumo Lab", key="agotado_guardar"):
-        new_file = crear_nueva_version_filename()
-        with pd.ExcelWriter(new_file, engine="openpyxl") as writer:
-            for sht, df_sht in st.session_state["data_dict"].items():
-                cols_int = ["ColorGroup","EsTitulo","GroupCount","MultiSort","NotTitulo","GroupID"]
-                temp = df_sht.drop(columns=cols_int, errors="ignore")
-                temp.to_excel(writer, sheet_name=sht, index=False)
-        with pd.ExcelWriter(STOCK_FILE, engine="openpyxl") as writer:
-            for sht, df_sht in st.session_state["data_dict"].items():
-                cols_int = ["ColorGroup","EsTitulo","GroupCount","MultiSort","NotTitulo","GroupID"]
-                temp = df_sht.drop(columns=cols_int, errors="ignore")
-                temp.to_excel(writer, sheet_name=sht, index=False)
-        if hoja_sel in st.session_state["data_dict_b"]:
-            df_b_hoja = st.session_state["data_dict_b"][hoja_sel].copy()
-            if "Nombre producto" in df_b_hoja.columns and "NºLote" in df_b_hoja.columns:
-                df_b_hoja = df_b_hoja[~(
-                    (df_b_hoja["Nombre producto"] == nombre_sel) &
-                    (df_b_hoja["NºLote"] == str(lote_b))
-                )]
-                st.session_state["data_dict_b"][hoja_sel] = df_b_hoja
-                new_file_b = crear_nueva_version_filename_b()
-                with pd.ExcelWriter(new_file_b, engine="openpyxl") as writer_b:
-                    for sht_b, df_sht_b in st.session_state["data_dict_b"].items():
-                        df_sht_b.to_excel(writer_b, sheet_name=sht_b, index=False)
-                with pd.ExcelWriter(STOCK_FILE_B, engine="openpyxl") as writer_b:
-                    for sht_b, df_sht_b in st.session_state["data_dict_b"].items():
-                        df_sht_b.to_excel(writer_b, sheet_name=sht_b, index=False)
-        st.success("✅ Cambios guardados en Hoja A y B (si coincidía).")
-        st.rerun()
-
-st.divider()
 
 # -------------------------------------------------------------------------
 # CUERPO PRINCIPAL => Edición en Hoja Principal (A)
@@ -803,4 +636,175 @@ if st.button("Guardar Cambios en Hoja Stock"):
     st.download_button("Descargar Excel A modificado", excel_bytes, "Reporte_Stock.xlsx",
                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     st.rerun()
+
+
+st.divider()
+st.divider()
+# -------------------------------------------------------------------------
+# AGRUPAR EN TABS: Ver Base de Datos Historial (B), Filtrar Reactivos, e Informar Reactivo Agotado
+# -------------------------------------------------------------------------
+tabs = st.tabs(["Ver Base de Datos Historial (B)", "Filtrar Reactivos Limitantes/Compartidos", "Informar Reactivo Agotado"])
+
+with tabs[0]:
+    st.write("### Vista de la Base de Datos Historial (B)")
+    if st.session_state["data_dict_b"]:
+        hojas_b = list(st.session_state["data_dict_b"].keys())
+        hoja_b_sel = st.selectbox("Selecciona hoja en B (vista):", hojas_b, key="vista_tab")
+        df_b_vista = st.session_state["data_dict_b"][hoja_b_sel].copy()
+        if "Nombre producto" in df_b_vista.columns and "NºLote" in df_b_vista.columns:
+            df_b_vista.sort_values(by=["Nombre producto","NºLote"], inplace=True, ignore_index=True)
+        st.dataframe(df_b_vista)
+        excel_b_mem = generar_excel_en_memoria(df_b_vista, sheet_nm=hoja_b_sel)
+        st.download_button(
+            label="Descargar hoja de Excel B (vista)",
+            data=excel_b_mem,
+            file_name="Hoja_Historico_B_vista.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    else:
+        st.write("No hay datos en la Base Historial (B).")
+
+with tabs[1]:
+    st.write("### Filtrar Reactivos Limitantes/Compartidos")
+    # 1) Definimos el set de referencias "limitantes"
+    limitantes_set = {
+        "A42006","A42007","A27762","A34018","A33638","A33639","A27758","A27765","A4517",
+        "A3410","A34537","A45617","A34540","A36410","A29025","A29027","A29026","A27754",
+        "11754050","11766050"
+    }
+    if not st.session_state["data_dict_b"]:
+        st.warning("No hay datos en base B. Verifica que Stock_Historico.xlsx tenga contenido.")
+        st.stop()
+    all_rows_b = []
+    for sheet_b, df_b_sht in st.session_state["data_dict_b"].items():
+        temp_df = df_b_sht.copy()
+        temp_df["(Hoja B)"] = sheet_b  
+        all_rows_b.append(temp_df)
+    df_b_combined = pd.concat(all_rows_b, ignore_index=True)
+    df_b_combined = enforce_types(df_b_combined)
+    refs_info = []
+    for idx, row in df_b_combined.iterrows():
+        ref = str(row["Ref. Fisher"]) if "Ref. Fisher" in row else ""
+        nom = str(row["Nombre producto"]) if "Nombre producto" in row else ""
+        hoja = str(row["(Hoja B)"]) if "(Hoja B)" in row else "??"
+        if ref or nom:
+            refs_info.append((ref.strip(), nom.strip(), hoja.strip()))
+    unique_triples = set(refs_info)
+    limitantes_list = []
+    compartidos_list = []
+    for (ref_fish, nom_prod, hoja_orig) in unique_triples:
+        if ref_fish.strip().upper() == "A":
+            continue
+        if ref_fish in limitantes_set:
+            limitantes_list.append((ref_fish, nom_prod, hoja_orig))
+        else:
+            compartidos_list.append((ref_fish, nom_prod, hoja_orig))
+    grupo_elegido = st.radio("¿Qué grupo de reactivos quieres filtrar?", ("limitante", "compartido"), key="grupo_filtrar")
+    if grupo_elegido == "limitante":
+        op_list = limitantes_list
+    else:
+        op_list = compartidos_list
+    if not op_list:
+        st.warning(f"No se encontraron reactivos en la categoría '{grupo_elegido}' dentro de la base B.")
+        st.stop()
+    def display_label(tup):
+        lab = f"{tup[0]} - {tup[1]}"
+        if tup[2]:
+            lab += f" ({tup[2]})"
+        return lab
+    seleccion = st.selectbox(
+        "Selecciona Reactivo",
+        [display_label(t) for t in op_list],
+        key="select_b_filtrado_tab"
+    )
+    if st.button("Buscar en Base Historial", key="buscar_filtrado"):
+        index_sel = [display_label(t) for t in op_list].index(seleccion)
+        ref_sel, nom_sel, hoja_sel_b = op_list[index_sel]
+        df_filtrado = df_b_combined[
+            (df_b_combined["Ref. Fisher"].astype(str).str.strip() == ref_sel)
+        ].copy()
+        if "Caducidad" in df_filtrado.columns:
+            df_filtrado = df_filtrado.dropna(subset=["Caducidad"])
+        if df_filtrado.empty:
+            st.warning("No se encontraron reactivos (en B) con esos parámetros.")
+        else:
+            if "Caducidad" in df_filtrado.columns:
+                df_filtrado.sort_values(by="Caducidad", inplace=True, ignore_index=True)
+            if ref_sel == "A27754":
+                st.info("Nota: Esta referencia se comparte entre OCA y FOCUS.")
+            st.dataframe(df_filtrado)
+            excel_filtro = generar_excel_en_memoria(df_filtrado, "Filtro_B")
+            st.download_button(
+                label="Descargar resultados filtrados en Excel",
+                data=excel_filtro,
+                file_name="Filtro_B.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+with tabs[2]:
+    st.write("### Informar Reactivo Agotado")
+    if not st.session_state["data_dict"]:
+        st.error("No se pudo cargar la base de datos (A).")
+        st.stop()
+    hojas_a = list(st.session_state["data_dict"].keys())
+    hoja_sel = st.selectbox("Hoja A a consumir:", hojas_a, key="agotado_hoja")
+    df_a = st.session_state["data_dict"][hoja_sel].copy()
+    df_a = enforce_types(df_a)
+    if "Nombre producto" not in df_a.columns:
+        st.error("No existe columna 'Nombre producto' en esta hoja A.")
+        st.stop()
+    nombres_unicos = sorted(df_a["Nombre producto"].dropna().unique())
+    nombre_sel = st.selectbox("Nombre producto en A:", nombres_unicos, key="agotado_nombre")
+    df_cand = df_a[df_a["Nombre producto"]==nombre_sel]
+    if df_cand.empty:
+        st.warning("No se encontró ese nombre en esta hoja A.")
+    else:
+        idx_c = df_cand.index[0]
+        stock_c = df_a.at[idx_c,"Stock"] if "Stock" in df_a.columns else 0
+        uds_consumir = st.number_input("Uds. a consumir en A:", min_value=0, step=1, key="agotado_uds")
+        if st.button("Consumir en Lab (memoria)", key="agotado_consumir"):
+            nuevo_stock = max(0, stock_c - uds_consumir)
+            df_a.at[idx_c,"Stock"] = nuevo_stock
+            if nuevo_stock==0:
+                for col_vaciar in ["NºLote","Caducidad","Fecha Pedida","Fecha Llegada","Sitio almacenaje"]:
+                    if col_vaciar in df_a.columns:
+                        if col_vaciar in ["Caducidad","Fecha Pedida","Fecha Llegada"]:
+                            df_a.at[idx_c, col_vaciar] = pd.NaT
+                        else:
+                            df_a.at[idx_c, col_vaciar] = ""
+            st.session_state["data_dict"][hoja_sel] = df_a
+            st.warning(f"Consumidas {uds_consumir} uds. Stock final => {nuevo_stock}. (Sólo en memoria).")
+    st.write("**Eliminar en B** => introduce el Lote exacto. Si coincide Nombre+Lote, se borra de B.")
+    lote_b = st.number_input("Nº de Lote (en B)", min_value=0, step=1, key="agotado_lote")
+    if st.button("Guardar Cambios en Consumo Lab", key="agotado_guardar"):
+        new_file = crear_nueva_version_filename()
+        with pd.ExcelWriter(new_file, engine="openpyxl") as writer:
+            for sht, df_sht in st.session_state["data_dict"].items():
+                cols_int = ["ColorGroup","EsTitulo","GroupCount","MultiSort","NotTitulo","GroupID"]
+                temp = df_sht.drop(columns=cols_int, errors="ignore")
+                temp.to_excel(writer, sheet_name=sht, index=False)
+        with pd.ExcelWriter(STOCK_FILE, engine="openpyxl") as writer:
+            for sht, df_sht in st.session_state["data_dict"].items():
+                cols_int = ["ColorGroup","EsTitulo","GroupCount","MultiSort","NotTitulo","GroupID"]
+                temp = df_sht.drop(columns=cols_int, errors="ignore")
+                temp.to_excel(writer, sheet_name=sht, index=False)
+        if hoja_sel in st.session_state["data_dict_b"]:
+            df_b_hoja = st.session_state["data_dict_b"][hoja_sel].copy()
+            if "Nombre producto" in df_b_hoja.columns and "NºLote" in df_b_hoja.columns:
+                df_b_hoja = df_b_hoja[~(
+                    (df_b_hoja["Nombre producto"] == nombre_sel) &
+                    (df_b_hoja["NºLote"] == str(lote_b))
+                )]
+                st.session_state["data_dict_b"][hoja_sel] = df_b_hoja
+                new_file_b = crear_nueva_version_filename_b()
+                with pd.ExcelWriter(new_file_b, engine="openpyxl") as writer_b:
+                    for sht_b, df_sht_b in st.session_state["data_dict_b"].items():
+                        df_sht_b.to_excel(writer_b, sheet_name=sht_b, index=False)
+                with pd.ExcelWriter(STOCK_FILE_B, engine="openpyxl") as writer_b:
+                    for sht_b, df_sht_b in st.session_state["data_dict_b"].items():
+                        df_sht_b.to_excel(writer_b, sheet_name=sht_b, index=False)
+        st.success("✅ Cambios guardados en Hoja A y B (si coincidía).")
+        st.rerun()
+
+
 
