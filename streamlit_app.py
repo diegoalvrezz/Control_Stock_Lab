@@ -296,7 +296,7 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones Stock (A)", expanded=Fa
         files = sorted(os.listdir(VERSIONS_DIR))
         versions_no_original = [f for f in files if f!="Stock_Original.xlsx"]
         if versions_no_original:
-            version_sel = st.selectbox("Selecciona versión A:", versions_no_original)
+            version_sel = st.selectbox("Seleccione versión A:", versions_no_original)
             confirm_delete=False
             if version_sel:
                 file_path = os.path.join(VERSIONS_DIR,version_sel)
@@ -369,7 +369,7 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones Historial (B)", expande
         files_b = sorted(os.listdir(VERSIONS_DIR_B))
         versions_no_original_b = [f for f in files_b if f!="Stock_Historico_Original.xlsx"]
         if versions_no_original_b:
-            version_sel_b=st.selectbox("Selecciona versión B:", versions_no_original_b)
+            version_sel_b=st.selectbox("Seleccione versión B:", versions_no_original_b)
             confirm_delete_b=False
             if version_sel_b:
                 file_path_b = os.path.join(VERSIONS_DIR_B, version_sel_b)
@@ -448,7 +448,7 @@ if not st.session_state["data_dict"]:
     st.error("No se pudo cargar la base de datos (A).")
     st.stop()
 hojas_principales = list(st.session_state["data_dict"].keys())
-sheet_name = st.selectbox("Selecciona el panel:", hojas_principales, key="main_sheet_sel")
+sheet_name = st.selectbox("Seleccione el panel:", hojas_principales, key="main_sheet_sel")
 df_main_original = st.session_state["data_dict"][sheet_name].copy()
 df_main_original = enforce_types(df_main_original)
 df_for_style = df_main_original.copy()
@@ -469,7 +469,7 @@ if "Nombre producto" in df_main.columns and "Ref. Fisher" in df_main.columns:
     display_series = df_main.apply(lambda r: f"{r['Nombre producto']} ({r['Ref. Fisher']})", axis=1)
 else:
     display_series = df_main.iloc[:,0].astype(str)
-reactivo_sel = st.selectbox("Selecciona Reactivo a Modificar:", display_series.unique(), key="react_modif")
+reactivo_sel = st.selectbox("Seleccione Reactivo a Modificar:", display_series.unique(), key="react_modif")
 row_index = display_series[display_series == reactivo_sel].index[0]
 st.write("**Recuerde que no es necesario ingresar la fecha pedida si se está ingresando la fecha llegada**")
 def get_val(col, default=None):
@@ -651,7 +651,7 @@ with tabs[0]:
     st.write("### Vista de la Base de Datos Historial (B)")
     if st.session_state["data_dict_b"]:
         hojas_b = list(st.session_state["data_dict_b"].keys())
-        hoja_b_sel = st.selectbox("Selecciona hoja en B (vista):", hojas_b, key="vista_tab")
+        hoja_b_sel = st.selectbox("Seleccione hoja en B (vista):", hojas_b, key="vista_tab")
         df_b_vista = st.session_state["data_dict_b"][hoja_b_sel].copy()
         if "Nombre producto" in df_b_vista.columns and "NºLote" in df_b_vista.columns:
             df_b_vista.sort_values(by=["Nombre producto","NºLote"], inplace=True, ignore_index=True)
@@ -701,7 +701,7 @@ with tabs[1]:
             limitantes_list.append((ref_fish, nom_prod, hoja_orig))
         else:
             compartidos_list.append((ref_fish, nom_prod, hoja_orig))
-    grupo_elegido = st.radio("¿Qué grupo de reactivos quieres filtrar?", ("limitante", "compartido"), key="grupo_filtrar")
+    grupo_elegido = st.radio("¿Qué grupo de reactivos quiere filtrar?", ("limitante", "compartido"), key="grupo_filtrar")
     if grupo_elegido == "limitante":
         op_list = limitantes_list
     else:
@@ -715,7 +715,7 @@ with tabs[1]:
             lab += f" ({tup[2]})"
         return lab
     seleccion = st.selectbox(
-        "Selecciona Reactivo",
+        "Seleccione Reactivo",
         [display_label(t) for t in op_list],
         key="select_b_filtrado_tab"
     )
