@@ -585,7 +585,7 @@ else:
 reactivo_sel = st.selectbox("Selecciona Reactivo a Modificar:", display_series.unique(), key="react_modif")
 row_index = display_series[display_series == reactivo_sel].index[0]
 
-st.write("Recuerde que no es necesario ingresar la fecha pedida si se está ingresando la fecha llegada")
+st.write("**Recuerde que no es necesario ingresar la fecha pedida si se está ingresando la fecha llegada**")
 
 def get_val(col, default=None):
     return df_main.at[row_index, col] if col in df_main.columns else default
