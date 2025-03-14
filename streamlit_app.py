@@ -292,7 +292,7 @@ st.markdown("""
 # -------------------------------------------------------------------------
 # SIDEBAR => GESTIONAR VERSIONES DE A
 # -------------------------------------------------------------------------
-with st.sidebar.expander("🔎 Ver / Gestionar versiones A (Stock_Original)", expanded=False):
+with st.sidebar.expander("🔎 Ver / Gestionar versiones Stock (A)", expanded=False):
     if st.session_state["data_dict"]:
         files = sorted(os.listdir(VERSIONS_DIR))
         versions_no_original = [f for f in files if f!="Stock_Original.xlsx"]
@@ -366,7 +366,7 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones A (Stock_Original)", ex
 # -------------------------------------------------------------------------
 # SIDEBAR => GESTIONAR VERSIONES B
 # -------------------------------------------------------------------------
-with st.sidebar.expander("🔎 Ver / Gestionar versiones B (Histórico)", expanded=False):
+with st.sidebar.expander("🔎 Ver / Gestionar versiones Historial (B)", expanded=False):
     if st.session_state["data_dict_b"]:
         files_b = sorted(os.listdir(VERSIONS_DIR_B))
         versions_no_original_b = [f for f in files_b if f!="Stock_Historico_Original.xlsx"]
@@ -440,7 +440,7 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones B (Histórico)", expand
 # -------------------------------------------------------------------------
 # SIDEBAR => Ver Base de Datos Histórica (Excel B)
 # -------------------------------------------------------------------------
-with st.sidebar.expander("Ver Base de Datos Histórica (Excel B)", expanded=False):
+with st.sidebar.expander("Ver Base de Datos Historial (B)", expanded=False):
     if st.session_state["data_dict_b"]:
         hojas_b = list(st.session_state["data_dict_b"].keys())
         hoja_b_sel = st.selectbox("Selecciona hoja en B:", hojas_b)
@@ -870,7 +870,7 @@ with st.expander("🔎 Filtrar Reactivos Limitantes/Compartidos", expanded=False
             df_filtrado = df_filtrado.dropna(subset=["Caducidad"])
 
         if df_filtrado.empty:
-            st.warning("No se encontraron filas en B que coincidan con esa referencia y tengan caducidad.")
+            st.warning("No se encontraron reactivos (en B) con esos parámetros.")
         else:
             # Ordenamos por 'Caducidad' asc
             if "Caducidad" in df_filtrado.columns:
