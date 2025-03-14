@@ -769,7 +769,7 @@ with st.expander("🔎 Filtrar Reactivos en Base B (Limitantes vs. Compartidos)"
         "A42006","A42007","A27762","A34018","A33638","A33639","A27758","A27765","A4517",
         "A3410","A34537","A45617","A34540","A36410","A29025","A29027","A29026","A27754",
         "11754050","11766050"
-        # Añade o quita según necesites
+        # Ajusta según tus necesidades
     }
 
     if not st.session_state["data_dict_b"]:
@@ -780,36 +780,29 @@ with st.expander("🔎 Filtrar Reactivos en Base B (Limitantes vs. Compartidos)"
     all_rows_b = []
     for sheet_b, df_b_sht in st.session_state["data_dict_b"].items():
         temp_df = df_b_sht.copy()
-        # Añadimos una columna que indique la hoja de la que proviene (p.ej. OCA, FOCUS, etc.)
         temp_df["(Hoja B)"] = sheet_b  
         all_rows_b.append(temp_df)
     df_b_combined = pd.concat(all_rows_b, ignore_index=True)
     df_b_combined = enforce_types(df_b_combined)
 
     # Extraemos (Ref. Fisher, Nombre producto, Hoja)
-    # y determinamos si esa Ref. Fisher está en limitantes_set
-    # o es “compartido” (no está en limitantes_set).
     refs_info = []
     for idx, row in df_b_combined.iterrows():
         ref = str(row["Ref. Fisher"]) if "Ref. Fisher" in row else ""
         nom = str(row["Nombre producto"]) if "Nombre producto" in row else ""
         hoja = str(row["(Hoja B)"]) if "(Hoja B)" in row else "??"
-        # Almacenamos la triple (Ref, Nombre, Hoja)
         if ref or nom:
             refs_info.append((ref.strip(), nom.strip(), hoja.strip()))
+
+    # Quitamos duplicados
+    unique_triples = set(refs_info)
 
     limitantes_list = []
     compartidos_list = []
 
-    # Quitamos duplicados (usando un set) para no presentar repetidos
-    # OJO: si en B hay la misma Ref/Nombre en varias hojas, se agrupan
-    # Podríamos dejar la Hoja también en la distinción => up to you
-    unique_triples = set(refs_info)
-
     for (ref_fish, nom_prod, hoja_orig) in unique_triples:
-        # Sugerencia #3: en "compartido", no mostrar si la referencia es "A"
+        # Si la ref es "A", la omitimos de ambos
         if ref_fish.strip().upper() == "A":
-            # Saltamos (no lo incluimos) en ninguno de los dos grupos
             continue
 
         if ref_fish in limitantes_set:
@@ -817,7 +810,7 @@ with st.expander("🔎 Filtrar Reactivos en Base B (Limitantes vs. Compartidos)"
         else:
             compartidos_list.append((ref_fish, nom_prod, hoja_orig))
 
-    # 3) El usuario elige si busca en 'limitante' o 'compartido'
+    # Elegir limitante / compartido
     grupo_elegido = st.radio("¿Qué grupo de reactivos quieres filtrar?", ("limitante", "compartido"))
 
     if grupo_elegido == "limitante":
@@ -829,9 +822,8 @@ with st.expander("🔎 Filtrar Reactivos en Base B (Limitantes vs. Compartidos)"
         st.warning(f"No se encontraron reactivos en la categoría '{grupo_elegido}' dentro de la base B.")
         st.stop()
 
-    # Función para mostrar la info en el selectbox => "Ref - Nombre (Hoja)"
+    # Muestra "Ref - Nombre (Hoja)"
     def display_label(tup):
-        # tup => (ref_fish, nom_prod, hoja_orig)
         lab = f"{tup[0]} - {tup[1]}"
         if tup[2]:
             lab += f" ({tup[2]})"
@@ -844,32 +836,33 @@ with st.expander("🔎 Filtrar Reactivos en Base B (Limitantes vs. Compartidos)"
     )
 
     if st.button("Buscar en Base B"):
-        # Obtenemos la tupla real
+        # Tupla real
         index_sel = [display_label(t) for t in op_list].index(seleccion)
         ref_sel, nom_sel, hoja_sel_b = op_list[index_sel]
 
-        # FILTRAMOS: coincidencia en Ref O Nombre
+        # SUGERENCIA 2: Filtramos SOLO ref_fisher = ref_sel
         df_filtrado = df_b_combined[
             (df_b_combined["Ref. Fisher"].astype(str).str.strip() == ref_sel)
-            |
-            (df_b_combined["Nombre producto"].astype(str).str.strip() == nom_sel)
         ].copy()
 
+        # SUGERENCIA 1: Mantener solo filas con caducidad no vacía
+        if "Caducidad" in df_filtrado.columns:
+            df_filtrado = df_filtrado.dropna(subset=["Caducidad"])
+
         if df_filtrado.empty:
-            st.warning("No se encontraron filas en B que coincidan con ese reactivo.")
+            st.warning("No se encontraron filas en B que coincidan con esa referencia y tengan caducidad.")
         else:
             # Ordenamos por 'Caducidad' asc
             if "Caducidad" in df_filtrado.columns:
                 df_filtrado.sort_values(by="Caducidad", inplace=True, ignore_index=True)
 
-            # Sugerencia #2: si la referencia es "A27754", mostrar un aviso
+            # Si la referencia es A27754 => aviso
             if ref_sel == "A27754":
                 st.info("Nota: Esta referencia se comparte entre OCA y FOCUS.")
 
             st.write("### Resultados en Base B (ordenados por Caducidad)")
             st.dataframe(df_filtrado)
 
-            # Botón de descarga
             excel_filtro = generar_excel_en_memoria(df_filtrado, "Filtro_B")
             st.download_button(
                 label="Descargar resultados filtrados en Excel",
@@ -877,4 +870,5 @@ with st.expander("🔎 Filtrar Reactivos en Base B (Limitantes vs. Compartidos)"
                 file_name="Filtro_B.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
+
 
