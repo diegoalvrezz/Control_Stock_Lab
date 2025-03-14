@@ -295,65 +295,78 @@ st.markdown("""
 with st.sidebar.expander("🔎 Ver / Gestionar versiones Stock (A)", expanded=False):
     if st.session_state["data_dict"]:
         files = sorted(os.listdir(VERSIONS_DIR))
-        versions_no_original = [f for f in files if f!="Stock_Original.xlsx"]
+        versions_no_original = [f for f in files if f != "Stock_Original.xlsx"]
         if versions_no_original:
             version_sel = st.selectbox("Seleccione versión A:", versions_no_original)
-            confirm_delete=False
             if version_sel:
-                file_path = os.path.join(VERSIONS_DIR,version_sel)
+                file_path = os.path.join(VERSIONS_DIR, version_sel)
                 if os.path.isfile(file_path):
-                    with open(file_path,"rb") as excel_file:
-                        excel_bytes=excel_file.read()
+                    with open(file_path, "rb") as excel_file:
+                        excel_bytes = excel_file.read()
                     st.download_button(
                         label=f"Descargar {version_sel}",
                         data=excel_bytes,
                         file_name=version_sel,
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
-                if st.checkbox(f"Confirmar eliminación de '{version_sel}'"):
-                    confirm_delete=True
+                # Confirmación extra para eliminar la versión A seleccionada
+                confirm_text_A = st.text_input(
+                    f"Para confirmar la eliminación de '{version_sel}', escribe 'ELIMINAR'",
+                    key="confirm_elim_A"
+                )
                 if st.button("Eliminar esta versión A"):
-                    if confirm_delete:
+                    if confirm_text_A == "ELIMINAR":
                         try:
                             os.remove(file_path)
                             st.warning(f"Versión '{version_sel}' eliminada.")
                             time.sleep(2)
                             st.rerun()
-                        except:
+                        except Exception as e:
                             st.error("Error al intentar eliminar la versión.")
                     else:
-                        st.error("Marca la casilla para confirmar la eliminación.")
+                        st.error("Confirme la eliminación escribiendo 'ELIMINAR' en el campo de texto.")
         else:
             st.write("No hay versiones guardadas de A (excepto la original).")
 
+        # Botón para eliminar TODAS las versiones A (excepto original)
+        confirm_all_A = st.text_input("Para confirmar, escribe 'ELIMINAR_TODAS'", key="confirm_all_A")
         if st.button("Eliminar TODAS las versiones A (excepto original)"):
-            for f in versions_no_original:
-                try:
-                    os.remove(os.path.join(VERSIONS_DIR,f))
-                except:
-                    pass
-            st.info("Todas las versiones (excepto la original) eliminadas.")
-            time.sleep(2)
-            st.rerun()
-
-        if st.button("Eliminar TODAS las versiones A excepto la última y la original"):
-            if len(versions_no_original)>1:
-                sorted_vers=sorted(versions_no_original)
-                last_version=sorted_vers[-1]
+            if confirm_all_A == "ELIMINAR_TODAS":
                 for f in versions_no_original:
-                    if f!=last_version:
-                        try:
-                            os.remove(os.path.join(VERSIONS_DIR,f))
-                        except:
-                            pass
-                st.info(f"Se han eliminado todas las versiones excepto: {last_version} y Stock_Original.xlsx")
+                    try:
+                        os.remove(os.path.join(VERSIONS_DIR, f))
+                    except:
+                        pass
+                st.info("Todas las versiones (excepto la original) eliminadas.")
                 time.sleep(2)
                 st.rerun()
             else:
-                st.write("Solo hay una versión o ninguna versión, no se elimina nada más.")
+                st.error("Debe escribir 'ELIMINAR_TODAS' para confirmar la acción.")
 
+        # Botón para eliminar TODAS las versiones A excepto la última y la original
+        confirm_partial_A = st.text_input("Para confirmar, escribe 'ELIMINAR_MAS'", key="confirm_partial_A")
+        if st.button("Eliminar TODAS las versiones A excepto la última y la original"):
+            if confirm_partial_A == "ELIMINAR_MAS":
+                if len(versions_no_original) > 1:
+                    sorted_vers = sorted(versions_no_original)
+                    last_version = sorted_vers[-1]
+                    for f in versions_no_original:
+                        if f != last_version:
+                            try:
+                                os.remove(os.path.join(VERSIONS_DIR, f))
+                            except:
+                                pass
+                    st.info(f"Se han eliminado todas las versiones excepto: {last_version} y Stock_Original.xlsx")
+                    time.sleep(2)
+                    st.rerun()
+                else:
+                    st.write("Solo hay una versión o ninguna versión, no se elimina nada más.")
+            else:
+                st.error("Debe confirmar escribiendo 'ELIMINAR_MAS'.")
+        
+        # Botón para limpiar la Base de Datos A
         if st.button("Limpiar Base de Datos A"):
-            original_path = os.path.join(VERSIONS_DIR,"Stock_Original.xlsx")
+            original_path = os.path.join(VERSIONS_DIR, "Stock_Original.xlsx")
             if os.path.exists(original_path):
                 shutil.copy(original_path, STOCK_FILE)
                 st.success("Base de datos A restaurada al estado original.")
@@ -366,20 +379,20 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones Stock (A)", expanded=Fa
         st.error("No hay data_dict. Verifica Stock_Original.xlsx.")
         st.stop()
 
+
 # -------------------------------------------------------------------------
 # SIDEBAR => GESTIONAR VERSIONES B
 # -------------------------------------------------------------------------
 with st.sidebar.expander("🔎 Ver / Gestionar versiones Historial (B)", expanded=False):
     if st.session_state["data_dict_b"]:
         files_b = sorted(os.listdir(VERSIONS_DIR_B))
-        versions_no_original_b = [f for f in files_b if f!="Stock_Historico_Original.xlsx"]
+        versions_no_original_b = [f for f in files_b if f != "Stock_Historico_Original.xlsx"]
         if versions_no_original_b:
-            version_sel_b=st.selectbox("Seleccione versión B:", versions_no_original_b)
-            confirm_delete_b=False
+            version_sel_b = st.selectbox("Seleccione versión B:", versions_no_original_b)
             if version_sel_b:
                 file_path_b = os.path.join(VERSIONS_DIR_B, version_sel_b)
                 if os.path.isfile(file_path_b):
-                    with open(file_path_b,"rb") as excel_file_b:
+                    with open(file_path_b, "rb") as excel_file_b:
                         excel_bytes_b = excel_file_b.read()
                     st.download_button(
                         label=f"Descargar {version_sel_b}",
@@ -387,50 +400,64 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones Historial (B)", expande
                         file_name=version_sel_b,
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
-                if st.checkbox(f"Confirmar eliminación de '{version_sel_b}' (B)"):
-                    confirm_delete_b=True
+                # Confirmación extra para eliminar la versión B seleccionada
+                confirm_text_B = st.text_input(
+                    f"Para confirmar la eliminación de '{version_sel_b}' (B), escribe 'ELIMINAR'",
+                    key="confirm_elim_B"
+                )
                 if st.button("Eliminar esta versión B"):
-                    if confirm_delete_b:
+                    if confirm_text_B == "ELIMINAR":
                         try:
                             os.remove(file_path_b)
                             st.warning(f"Versión '{version_sel_b}' eliminada de B.")
                             time.sleep(2)
                             st.rerun()
-                        except:
+                        except Exception as e:
                             st.error("Error al intentar eliminar la versión.")
                     else:
-                        st.error("Marca la casilla para confirmar la eliminación.")
+                        st.error("Confirme la eliminación escribiendo 'ELIMINAR' en el campo de texto.")
         else:
             st.write("No hay versiones guardadas de B (excepto la original).")
 
+        # Botón para eliminar TODAS las versiones B (excepto original)
+        confirm_all_B = st.text_input("Para confirmar, escribe 'ELIMINAR_TODAS'", key="confirm_all_B")
         if st.button("Eliminar TODAS las versiones B (excepto original)"):
-            for f in versions_no_original_b:
-                try:
-                    os.remove(os.path.join(VERSIONS_DIR_B,f))
-                except:
-                    pass
-            st.info("Todas las versiones de B (excepto la original) eliminadas.")
-            time.sleep(2)
-            st.rerun()
-
-        if st.button("Eliminar TODAS las versiones B excepto la última y la original"):
-            if len(versions_no_original_b)>1:
-                sorted_vers_b=sorted(versions_no_original_b)
-                last_version_b = sorted_vers_b[-1]
+            if confirm_all_B == "ELIMINAR_TODAS":
                 for f in versions_no_original_b:
-                    if f!= last_version_b:
-                        try:
-                            os.remove(os.path.join(VERSIONS_DIR_B,f))
-                        except:
-                            pass
-                st.info(f"Se han eliminado todas las versiones excepto: {last_version_b} y Stock_Historico_Original.xlsx")
+                    try:
+                        os.remove(os.path.join(VERSIONS_DIR_B, f))
+                    except:
+                        pass
+                st.info("Todas las versiones de B (excepto la original) eliminadas.")
                 time.sleep(2)
                 st.rerun()
             else:
-                st.write("Solo hay una versión o ninguna versión, no se elimina nada más.")
+                st.error("Debe escribir 'ELIMINAR_TODAS' para confirmar la acción.")
 
+        # Botón para eliminar TODAS las versiones B excepto la última y la original
+        confirm_partial_B = st.text_input("Para confirmar, escribe 'ELIMINAR_MAS'", key="confirm_partial_B")
+        if st.button("Eliminar TODAS las versiones B excepto la última y la original"):
+            if confirm_partial_B == "ELIMINAR_MAS":
+                if len(versions_no_original_b) > 1:
+                    sorted_vers_b = sorted(versions_no_original_b)
+                    last_version_b = sorted_vers_b[-1]
+                    for f in versions_no_original_b:
+                        if f != last_version_b:
+                            try:
+                                os.remove(os.path.join(VERSIONS_DIR_B, f))
+                            except:
+                                pass
+                    st.info(f"Se han eliminado todas las versiones excepto: {last_version_b} y Stock_Historico_Original.xlsx")
+                    time.sleep(2)
+                    st.rerun()
+                else:
+                    st.write("Solo hay una versión o ninguna versión, no se elimina nada más.")
+            else:
+                st.error("Debe confirmar escribiendo 'ELIMINAR_MAS'.")
+        
+        # Botón para limpiar la Base de Datos B
         if st.button("Limpiar Base de Datos B"):
-            original_path_b = os.path.join(VERSIONS_DIR_B,"Stock_Historico_Original.xlsx")
+            original_path_b = os.path.join(VERSIONS_DIR_B, "Stock_Historico_Original.xlsx")
             if os.path.exists(original_path_b):
                 shutil.copy(original_path_b, STOCK_FILE_B)
                 st.success("Base de datos B restaurada al estado original.")
@@ -441,8 +468,6 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones Historial (B)", expande
                 st.error("No se encontró la copia original de B.")
     else:
         st.write("No hay data_dict_b. Verifica Stock_Historico.xlsx.")
-
-
 
 
 st.markdown("### Información")
