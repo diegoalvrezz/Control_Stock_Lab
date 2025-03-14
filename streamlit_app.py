@@ -329,9 +329,9 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones Stock (A)", expanded=Fa
             st.write("No hay versiones guardadas de A (excepto la original).")
 
         # Botón para eliminar TODAS las versiones A (excepto original)
-        confirm_all_A = st.text_input("Para confirmar, escribe 'ELIMINAR_TODAS'", key="confirm_all_A")
+        confirm_all_A = st.text_input("Para confirmar, escribe 'ELIMINAR'", key="confirm_all_A")
         if st.button("Eliminar TODAS las versiones A (excepto original)"):
-            if confirm_all_A == "ELIMINAR_TODAS":
+            if confirm_all_A == "ELIMINAR":
                 for f in versions_no_original:
                     try:
                         os.remove(os.path.join(VERSIONS_DIR, f))
@@ -341,12 +341,12 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones Stock (A)", expanded=Fa
                 time.sleep(2)
                 st.rerun()
             else:
-                st.error("Debe escribir 'ELIMINAR_TODAS' para confirmar la acción.")
+                st.error("Debe escribir 'ELIMINAR' para confirmar la acción.")
 
         # Botón para eliminar TODAS las versiones A excepto la última y la original
-        confirm_partial_A = st.text_input("Para confirmar, escribe 'ELIMINAR_MAS'", key="confirm_partial_A")
+        confirm_partial_A = st.text_input("Para confirmar, escribe 'ELIMINAR'", key="confirm_partial_A")
         if st.button("Eliminar TODAS las versiones A excepto la última y la original"):
-            if confirm_partial_A == "ELIMINAR_MAS":
+            if confirm_partial_A == "ELIMINAR":
                 if len(versions_no_original) > 1:
                     sorted_vers = sorted(versions_no_original)
                     last_version = sorted_vers[-1]
@@ -362,7 +362,7 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones Stock (A)", expanded=Fa
                 else:
                     st.write("Solo hay una versión o ninguna versión, no se elimina nada más.")
             else:
-                st.error("Debe confirmar escribiendo 'ELIMINAR_MAS'.")
+                st.error("Debe confirmar escribiendo 'ELIMINAR'.")
         
         # Botón para limpiar la Base de Datos A
         if st.button("Limpiar Base de Datos A"):
@@ -420,9 +420,9 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones Historial (B)", expande
             st.write("No hay versiones guardadas de B (excepto la original).")
 
         # Botón para eliminar TODAS las versiones B (excepto original)
-        confirm_all_B = st.text_input("Para confirmar, escribe 'ELIMINAR_TODAS'", key="confirm_all_B")
+        confirm_all_B = st.text_input("Para confirmar, escribe 'ELIMINAR'", key="confirm_all_B")
         if st.button("Eliminar TODAS las versiones B (excepto original)"):
-            if confirm_all_B == "ELIMINAR_TODAS":
+            if confirm_all_B == "ELIMINAR":
                 for f in versions_no_original_b:
                     try:
                         os.remove(os.path.join(VERSIONS_DIR_B, f))
@@ -432,12 +432,12 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones Historial (B)", expande
                 time.sleep(2)
                 st.rerun()
             else:
-                st.error("Debe escribir 'ELIMINAR_TODAS' para confirmar la acción.")
+                st.error("Debe escribir 'ELIMINAR' para confirmar la acción.")
 
         # Botón para eliminar TODAS las versiones B excepto la última y la original
-        confirm_partial_B = st.text_input("Para confirmar, escribe 'ELIMINAR_MAS'", key="confirm_partial_B")
+        confirm_partial_B = st.text_input("Para confirmar, escribe 'ELIMINAR'", key="confirm_partial_B")
         if st.button("Eliminar TODAS las versiones B excepto la última y la original"):
-            if confirm_partial_B == "ELIMINAR_MAS":
+            if confirm_partial_B == "ELIMINAR":
                 if len(versions_no_original_b) > 1:
                     sorted_vers_b = sorted(versions_no_original_b)
                     last_version_b = sorted_vers_b[-1]
@@ -453,7 +453,7 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones Historial (B)", expande
                 else:
                     st.write("Solo hay una versión o ninguna versión, no se elimina nada más.")
             else:
-                st.error("Debe confirmar escribiendo 'ELIMINAR_MAS'.")
+                st.error("Debe confirmar escribiendo 'ELIMINAR'.")
         
         # Botón para limpiar la Base de Datos B
         if st.button("Limpiar Base de Datos B"):
