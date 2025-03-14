@@ -673,7 +673,7 @@ if pd.notna(fped_new):
         )
         st.markdown('</div>', unsafe_allow_html=True)
 
-if st.button("Guardar Cambios en Hoja A"):
+if st.button("Guardar Cambios en Hoja Stock"):
     if pd.notna(flleg_new):
         fped_new = pd.NaT
 
@@ -761,8 +761,8 @@ if st.button("Guardar Cambios en Hoja A"):
 # -------------------------------------------------------------------------
 # NUEVA SECCIÓN: Filtrar entre Limitantes y Compartidos (Base B)
 # -------------------------------------------------------------------------
-with st.expander("🔎 Filtrar Reactivos en Base B (Limitantes vs. Compartidos)", expanded=False):
-    st.write("Selecciona un grupo y luego un reactivo para ver en qué entradas aparece dentro de la base B.")
+with st.expander("🔎 Filtrar Reactivos Limitantes/Compartidos", expanded=False):
+    st.write("Selecciona un grupo y luego un reactivo para ver en qué entradas aparece dentro de la base historial.")
 
     # 1) Definimos el set de referencias "limitantes"
     limitantes_set = {
@@ -835,7 +835,7 @@ with st.expander("🔎 Filtrar Reactivos en Base B (Limitantes vs. Compartidos)"
         key="select_b_filtrado"
     )
 
-    if st.button("Buscar en Base B"):
+    if st.button("Buscar en Base Historial"):
         # Tupla real
         index_sel = [display_label(t) for t in op_list].index(seleccion)
         ref_sel, nom_sel, hoja_sel_b = op_list[index_sel]
