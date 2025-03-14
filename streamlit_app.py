@@ -13,130 +13,6 @@ import time
 st.set_page_config(page_title="Control de Stock con Lotes", layout="centered")
 st.title("🔬 Control Stock Lab. Patología Molécular")
 
-LOTS_DATA = {
-    "FOCUS": {
-        "Panel Oncomine Focus Library Assay Chef Ready": [
-            "Primers DNA", "Primers RNA", "Reagents DL8", "Chef supplies (plásticos)",
-            "Placas", "Solutions DL8"
-        ],
-        "Ion 510/520/530 kit-Chef (TEMPLADO)": [
-            "Chef Reagents", "Chef Solutions", "Chef supplies (plásticos)",
-            "Solutions Reagent S5", "Botellas S5"
-        ],
-        "Recover All TM Multi-Sample RNA/DNA Isolation workflow-Kit": [
-            "Kit extracción DNA/RNA", "RecoverAll TM kit (Dnase, protease,…)",
-            "H2O RNA free", "Tubos fondo cónico", "Superscript VILO cDNA Syntheis Kit",
-            "Qubit 1x dsDNA HS Assay kit (100 reactions)"
-        ],
-        "Chip secuenciación liberación de protones 6 millones de lecturas": []
-    },
-    "OCA": {
-        "Panel OCA Library Assay Chef Ready": [
-            "Primers DNA", "Primers RNA", "Reagents DL8", "Chef supplies (plásticos)",
-            "Placas", "Solutions DL8"
-        ],
-        "kit-Chef (TEMPLADO)": [
-            "Ion 540 TM Chef Reagents", "Chef Solutions", "Chef supplies (plásticos)",
-            "Solutions Reagent S5", "Botellas S5"
-        ],
-        "Chip secuenciación liberación de protones 6 millones de lecturas": [
-            "Ion 540 TM Chip Kit"
-        ],
-        "Recover All TM Multi-Sample RNA/DNA Isolation workflow-Kit": [
-            "Kit extracción DNA/RNA", "RecoverAll TM kit (Dnase, protease,…)",
-            "H2O RNA free", "Tubos fondo cónico"
-        ]
-    },
-    "OCA PLUS": {
-        "Panel OCA-PLUS Library Assay Chef Ready": [
-            "Primers DNA", "Uracil-DNA Glycosylase heat-labile", "Reagents DL8",
-            "Chef supplies (plásticos)", "Placas", "Solutions DL8"
-        ],
-        "kit-Chef (TEMPLADO)": [
-            "Ion 550 TM Chef Reagents", "Chef Solutions", "Chef Supplies (plásticos)",
-            "Solutions Reagent S5", "Botellas S5", "Chip secuenciación Ion 550 TM Chip Kit"
-        ],
-        "Recover All TM Multi-Sample RNA/DNA Isolation workflow-Kit": [
-            "Kit extracción DNA/RNA", "RecoverAll TM kit (Dnase, protease,…)",
-            "H2O RNA free", "Tubos fondo cónico"
-        ]
-    }
-}
-
-# Colores para asignar a grupos (si los usas en build_group_info_by_ref)
-# Puedes tener tu propia lista. Aquí va una de ejemplo.
-colors = [
-    "#FED7D7", "#FEE2E2", "#FFEDD5", "#FEF9C3", "#D9F99D",
-    "#CFFAFE", "#E0E7FF", "#FBCFE8", "#F9A8D4", "#E9D5FF",
-    "#FFD700", "#F0FFF0", "#D1FAE5", "#BAFEE2", "#A7F3D0", "#FFEC99"
-]
-
-def build_group_info_by_ref(df: pd.DataFrame, panel_default: str = None) -> pd.DataFrame:
-    """
-    Agrupa registros por 'Ref. Saturno', les asigna color y marca
-    cuál es la fila título en cada grupo de referencia, entre otras lógicas.
-
-    :param df: DataFrame a procesar.
-    :param panel_default: Nombre del panel (ej. 'FOCUS', 'OCA', etc.)
-                         para buscar títulos en la estructura LOTS_DATA.
-    :return: DataFrame con columnas adicionales como 'GroupID', 'EsTitulo', etc.
-    """
-    df = df.copy()
-    df["GroupID"] = df["Ref. Saturno"]
-    group_sizes = df.groupby("GroupID").size().to_dict()
-    df["GroupCount"] = df["GroupID"].apply(lambda x: group_sizes.get(x, 0))
-
-    # Aquí asignamos colores cíclicos
-    unique_ids = sorted(df["GroupID"].unique())
-    color_cycle_local = itertools.cycle([
-        "#FED7D7", "#FEE2E2", "#FFEDD5", "#FEF9C3", "#D9F99D", "#CFFAFE",
-        "#E0E7FF", "#FBCFE8", "#F9A8D4", "#E9D5FF", "#FFD700", "#F0FFF0",
-        "#D1FAE5", "#BAFEE2", "#A7F3D0", "#FFEC99"
-    ])
-    group_color_map = {}
-    for gid in unique_ids:
-        group_color_map[gid] = next(color_cycle_local)
-    df["ColorGroup"] = df["GroupID"].apply(lambda x: group_color_map.get(x,"#FFFFFF"))
-
-    # Asignamos cuál es la fila título
-    group_titles = []
-    if panel_default in LOTS_DATA:
-        group_titles = [t.strip().lower() for t in LOTS_DATA[panel_default].keys()]
-
-    df["EsTitulo"] = False
-    for gid, group_df in df.groupby("GroupID"):
-        mask = group_df["Nombre producto"].str.strip().str.lower().isin(group_titles)
-        if mask.any():
-            idxs = group_df[mask].index
-            df.loc[idxs, "EsTitulo"] = True
-        else:
-            first_idx = group_df.index[0]
-            df.at[first_idx, "EsTitulo"] = True
-
-    # Usamos columnas auxiliares para orden
-    df["MultiSort"] = df["GroupCount"].apply(lambda x: 0 if x > 1 else 1)
-    df["NotTitulo"] = df["EsTitulo"].apply(lambda x: 0 if x else 1)
-
-    return df
-
-
-def calc_alarma(row):
-    """
-    Devuelve un string con un ícono de alerta:
-    - '🔴' si el Stock es 0 y no hay Fecha Pedida.
-    - '🟨' si el Stock es 0 y sí hay Fecha Pedida.
-    - '' (vacío) si no hay que alertar.
-    """
-    stock_val = row.get("Stock", 0)
-    fecha_pedida = row.get("Fecha Pedida", None)
-
-    if stock_val == 0 and pd.isna(fecha_pedida):
-        return "🔴"
-    elif stock_val == 0 and not pd.isna(fecha_pedida):
-        return "🟨"
-    return ""
-
-
 # ---------------------------
 # Autenticación (estructura actualizada)
 # ---------------------------
@@ -184,7 +60,7 @@ if st.button("Cerrar sesión"):
 # EXCEL A (Stock_Original)
 # -------------------------------------------------------------------------
 STOCK_FILE = "Stock_Original.xlsx"
-VERSIONS_DIR = "versions"  
+VERSIONS_DIR = "versions"
 ORIGINAL_FILE = os.path.join(VERSIONS_DIR, "Stock_Original.xlsx")
 
 os.makedirs(VERSIONS_DIR, exist_ok=True)
@@ -199,10 +75,6 @@ def init_original():
 init_original()
 
 def load_data_a():
-    """
-    TODO: Ajustar la lógica de lectura del Excel principal (Stock_Original).
-    Retorna un dict con { hoja_name: DataFrame }.
-    """
     try:
         data = pd.read_excel(STOCK_FILE, sheet_name=None, engine="openpyxl")
         for sheet, df_sheet in data.items():
@@ -215,6 +87,10 @@ def load_data_a():
     except Exception as e:
         st.error(f"Error al cargar Stock_Original: {e}")
         return {}
+
+def crear_nueva_version_filename():
+    fh = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    return os.path.join(VERSIONS_DIR, f"Stock_{fh}.xlsx")
 
 # -------------------------------------------------------------------------
 # EXCEL B (Stock_Historico)
@@ -240,11 +116,43 @@ def init_original_b():
 
 init_original_b()
 
+def crear_nueva_version_filename_b():
+    fh = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    return os.path.join(VERSIONS_DIR_B, f"StockB_{fh}.xlsx")
+
+# -------------------------------------------------------------------------
+# FUNCIONES COMUNES
+# -------------------------------------------------------------------------
+def generar_excel_en_memoria(df_act: pd.DataFrame, sheet_nm="Hoja1"):
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df_act.to_excel(writer, sheet_name=sheet_nm, index=False)
+    output.seek(0)
+    return output.getvalue()
+
+def enforce_types(df: pd.DataFrame):
+    if "Ref. Saturno" in df.columns:
+        df["Ref. Saturno"] = pd.to_numeric(df["Ref. Saturno"], errors="coerce").fillna(0).astype(int)
+    if "Ref. Fisher" in df.columns:
+        df["Ref. Fisher"] = df["Ref. Fisher"].astype(str)
+    if "Nombre producto" in df.columns:
+        df["Nombre producto"] = df["Nombre producto"].astype(str)
+    if "Tª" in df.columns:
+        df["Tª"] = df["Tª"].astype(str)
+    if "Uds." in df.columns:
+        df["Uds."] = pd.to_numeric(df["Uds."], errors="coerce").fillna(0).astype(int)
+    if "NºLote" in df.columns:
+        df["NºLote"] = df["NºLote"].astype(str).fillna("")
+    for col in ["Caducidad","Fecha Pedida","Fecha Llegada"]:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], errors="coerce")
+    if "Sitio almacenaje" in df.columns:
+        df["Sitio almacenaje"] = df["Sitio almacenaje"].astype(str)
+    if "Stock" in df.columns:
+        df["Stock"] = pd.to_numeric(df["Stock"], errors="coerce").fillna(0).astype(int)
+    return df
+
 def load_data_b():
-    """
-    TODO: Ajustar la lógica de lectura del Excel histórico (Stock_Historico).
-    Retorna un dict con { hoja_name: DataFrame }.
-    """
     if not os.path.exists(STOCK_FILE_B):
         return {}
     try:
@@ -257,7 +165,7 @@ def load_data_b():
         return {}
 
 # -------------------------------------------------------------------------
-# Inicializamos en session_state
+# USAR st.session_state
 # -------------------------------------------------------------------------
 if "data_dict" not in st.session_state:
     st.session_state["data_dict"] = load_data_a()
@@ -265,157 +173,198 @@ if "data_dict" not in st.session_state:
 if "data_dict_b" not in st.session_state:
     st.session_state["data_dict_b"] = load_data_b()
 
+data_dict = st.session_state["data_dict"]
+data_dict_b = st.session_state["data_dict_b"]
+
 # -------------------------------------------------------------------------
-# Funciones para crear subdirectorios Año/Mes/Día y listarlos
+# LÓGICA DE LOTES Y ESTILOS
 # -------------------------------------------------------------------------
-def create_dated_version_filename(base_dir, prefix="Stock"):
-    """
-    Crea subdirectorios en base a Año/Mes/Día dentro de `base_dir`,
-    y devuelve la ruta completa para guardar un nuevo archivo Excel.
-
-    Ejemplo de ruta generada:
-       versions/2025/03/14/Stock_2025-03-14_14-09-50.xlsx
-    """
-    now = datetime.datetime.now()
-    year_str = str(now.year)
-    month_str = now.strftime("%m")  # '01'..'12'
-    day_str = now.strftime("%d")    # '01'..'31'
-
-    year_dir = os.path.join(base_dir, year_str)
-    month_dir = os.path.join(year_dir, month_str)
-    day_dir = os.path.join(month_dir, day_str)
-
-    os.makedirs(day_dir, exist_ok=True)
-
-    timestamp = now.strftime("%Y-%m-%d_%H-%M-%S")
-    filename = f"{prefix}_{timestamp}.xlsx"
-    return os.path.join(day_dir, filename)
-
-def list_files_by_date(base_dir):
-    """
-    Recorre recursivamente el directorio base_dir organizado en subcarpetas Año/Mes/Día,
-    y retorna una estructura anidada, por ejemplo:
-    {
-      '2025': {
-         '03': {
-            '14': [ 'Stock_2025-03-14_14-09-50.xlsx', ... ],
-            ...
-         },
-         ...
-      },
+LOTS_DATA = {
+    "FOCUS": {
+        "Panel Oncomine Focus Library Assay Chef Ready": [
+            "Primers DNA", "Primers RNA", "Reagents DL8", "Chef supplies (plásticos)", "Placas", "Solutions DL8"
+        ],
+        "Ion 510/520/530 kit-Chef (TEMPLADO)": [
+            "Chef Reagents", "Chef Solutions", "Chef supplies (plásticos)", "Solutions Reagent S5", "Botellas S5"
+        ],
+        "Recover All TM Multi-Sample RNA/DNA Isolation workflow-Kit": [
+            "Kit extracción DNA/RNA", "RecoverAll TM kit (Dnase, protease,…)", "H2O RNA free",
+            "Tubos fondo cónico", "Superscript VILO cDNA Syntheis Kit", "Qubit 1x dsDNA HS Assay kit (100 reactions)"
+        ],
+        "Chip secuenciación liberación de protones 6 millones de lecturas": []
+    },
+    "OCA": {
+        "Panel OCA Library Assay Chef Ready": [
+            "Primers DNA", "Primers RNA", "Reagents DL8", "Chef supplies (plásticos)", "Placas", "Solutions DL8"
+        ],
+        "kit-Chef (TEMPLADO)": [
+            "Ion 540 TM Chef Reagents", "Chef Solutions", "Chef supplies (plásticos)",
+            "Solutions Reagent S5", "Botellas S5"
+        ],
+        "Chip secuenciación liberación de protones 6 millones de lecturas": [
+            "Ion 540 TM Chip Kit"
+        ],
+        "Recover All TM Multi-Sample RNA/DNA Isolation workflow-Kit": [
+            "Kit extracción DNA/RNA", "RecoverAll TM kit (Dnase, protease,…)", "H2O RNA free", "Tubos fondo cónico"
+        ]
+    },
+    "OCA PLUS": {
+        "Panel OCA-PLUS Library Assay Chef Ready": [
+            "Primers DNA", "Uracil-DNA Glycosylase heat-labile", "Reagents DL8",
+            "Chef supplies (plásticos)", "Placas", "Solutions DL8"
+        ],
+        "kit-Chef (TEMPLADO)": [
+            "Ion 550 TM Chef Reagents", "Chef Solutions", "Chef Supplies (plásticos)",
+            "Solutions Reagent S5", "Botellas S5", "Chip secuenciación Ion 550 TM Chip Kit"
+        ],
+        "Recover All TM Multi-Sample RNA/DNA Isolation workflow-Kit": [
+            "Kit extracción DNA/RNA", "RecoverAll TM kit (Dnase, protease,…)", "H2O RNA free", "Tubos fondo cónico"
+        ]
     }
-    """
-    date_structure = {}
-    if not os.path.exists(base_dir):
-        return date_structure
+}
 
-    for year in sorted(os.listdir(base_dir)):
-        year_path = os.path.join(base_dir, year)
-        if not os.path.isdir(year_path):
-            continue
-        if year not in date_structure:
-            date_structure[year] = {}
+panel_order = ["FOCUS","OCA","OCA PLUS"]
 
-        for month in sorted(os.listdir(year_path)):
-            month_path = os.path.join(year_path, month)
-            if not os.path.isdir(month_path):
-                continue
-            if month not in date_structure[year]:
-                date_structure[year][month] = {}
+colors = [
+    "#FED7D7", "#FEE2E2", "#FFEDD5", "#FEF9C3", "#D9F99D",
+    "#CFFAFE", "#E0E7FF", "#FBCFE8", "#F9A8D4", "#E9D5FF",
+    "#FFD700", "#F0FFF0", "#D1FAE5", "#BAFEE2", "#A7F3D0", "#FFEC99"
+]
 
-            for day in sorted(os.listdir(month_path)):
-                day_path = os.path.join(month_path, day)
-                if not os.path.isdir(day_path):
-                    continue
-                if day not in date_structure[year][month]:
-                    date_structure[year][month][day] = []
+def build_group_info_by_ref(df: pd.DataFrame, panel_default=None):
+    df = df.copy()
+    df["GroupID"] = df["Ref. Saturno"]
+    group_sizes = df.groupby("GroupID").size().to_dict()
+    df["GroupCount"] = df["GroupID"].apply(lambda x: group_sizes.get(x,0))
 
-                for fname in sorted(os.listdir(day_path)):
-                    fpath = os.path.join(day_path, fname)
-                    if os.path.isfile(fpath) and fname.endswith(".xlsx"):
-                        date_structure[year][month][day].append(fname)
+    unique_ids = sorted(df["GroupID"].unique())
+    color_cycle_local = itertools.cycle(colors)
+    group_color_map = {}
+    for gid in unique_ids:
+        group_color_map[gid] = next(color_cycle_local)
+    df["ColorGroup"] = df["GroupID"].apply(lambda x: group_color_map.get(x,"#FFFFFF"))
 
-    return date_structure
+    group_titles = []
+    if panel_default in LOTS_DATA:
+        group_titles = [t.strip().lower() for t in LOTS_DATA[panel_default].keys()]
+    df["EsTitulo"] = False
+    for gid, group_df in df.groupby("GroupID"):
+        mask = group_df["Nombre producto"].str.strip().str.lower().isin(group_titles)
+        if mask.any():
+            idxs = group_df[mask].index
+            df.loc[idxs,"EsTitulo"] = True
+        else:
+            first_idx = group_df.index[0]
+            df.at[first_idx,"EsTitulo"] = True
 
-# -------------------------------------------------------------------------
-# Otras funciones comunes
-# -------------------------------------------------------------------------
-def generar_excel_en_memoria(df_act: pd.DataFrame, sheet_nm="Hoja1"):
-    """
-    Crea un Excel en memoria con df_act, para descargarlo con st.download_button
-    """
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        df_act.to_excel(writer, sheet_name=sheet_nm, index=False)
-    output.seek(0)
-    return output.getvalue()
-
-def enforce_types(df: pd.DataFrame):
-    # Ajusta según tus columnas
-    if "Ref. Saturno" in df.columns:
-        df["Ref. Saturno"] = pd.to_numeric(df["Ref. Saturno"], errors="coerce").fillna(0).astype(int)
-    if "Ref. Fisher" in df.columns:
-        df["Ref. Fisher"] = df["Ref. Fisher"].astype(str)
-    if "Nombre producto" in df.columns:
-        df["Nombre producto"] = df["Nombre producto"].astype(str)
-    if "NºLote" in df.columns:
-        df["NºLote"] = df["NºLote"].astype(str).fillna("")
-    for col in ["Caducidad","Fecha Pedida","Fecha Llegada"]:
-        if col in df.columns:
-            df[col] = pd.to_datetime(df[col], errors="coerce")
-    if "Sitio almacenaje" in df.columns:
-        df["Sitio almacenaje"] = df["Sitio almacenaje"].astype(str)
-    if "Stock" in df.columns:
-        df["Stock"] = pd.to_numeric(df["Stock"], errors="coerce").fillna(0).astype(int)
+    df["MultiSort"] = df["GroupCount"].apply(lambda x: 0 if x>1 else 1)
+    df["NotTitulo"] = df["EsTitulo"].apply(lambda x: 0 if x else 1)
     return df
 
+def calc_alarma(row):
+    s = row.get("Stock",0)
+    fp = row.get("Fecha Pedida",None)
+    if s==0 and pd.isna(fp):
+        return "🔴"
+    elif s==0 and not pd.isna(fp):
+        return "🟨"
+    return ""
+
+def style_lote(row):
+    bg = row.get("ColorGroup","")
+    es_titulo = row.get("EsTitulo",False)
+    styles = [f"background-color:{bg}"]*len(row)
+    if es_titulo and "Nombre producto" in row.index:
+        idx = row.index.get_loc("Nombre producto")
+        styles[idx] += "; font-weight:bold"
+    return styles
+
+
+st.markdown("""
+    <style>
+    .big-select select {
+        font-size: 18px;
+        height: auto;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
 # -------------------------------------------------------------------------
-# Barra lateral => Ver/Gestionar versiones Stock (A)
+# SIDEBAR => GESTIONAR VERSIONES DE A
 # -------------------------------------------------------------------------
 with st.sidebar.expander("🔎 Ver / Gestionar versiones Stock (A)", expanded=False):
     if st.session_state["data_dict"]:
-        structureA = list_files_by_date(VERSIONS_DIR)
-        if not structureA:
-            st.write("No hay versiones guardadas en subcarpetas (excepto la original).")
+        files = sorted(os.listdir(VERSIONS_DIR))
+        versions_no_original = [f for f in files if f != "Stock_Original.xlsx"]
+        if versions_no_original:
+            version_sel = st.selectbox("Seleccione versión A:", versions_no_original)
+            if version_sel:
+                file_path = os.path.join(VERSIONS_DIR, version_sel)
+                if os.path.isfile(file_path):
+                    with open(file_path, "rb") as excel_file:
+                        excel_bytes = excel_file.read()
+                    st.download_button(
+                        label=f"Descargar {version_sel}",
+                        data=excel_bytes,
+                        file_name=version_sel,
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+                # Confirmación extra para eliminar la versión A seleccionada
+                confirm_text_A = st.text_input(
+                    f"Para confirmar la eliminación de '{version_sel}', escribe 'ELIMINAR'",
+                    key="confirm_elim_A"
+                )
+                if st.button("Eliminar esta versión A"):
+                    if confirm_text_A == "ELIMINAR":
+                        try:
+                            os.remove(file_path)
+                            st.warning(f"Versión '{version_sel}' eliminada.")
+                            time.sleep(2)
+                            st.rerun()
+                        except Exception as e:
+                            st.error("Error al intentar eliminar la versión.")
+                    else:
+                        st.error("Confirme la eliminación escribiendo 'ELIMINAR' en el campo de texto.")
         else:
-            yearsA = sorted(structureA.keys())
-            selected_year_A = st.selectbox("Año disponible (A)", yearsA, key="yearA")
-            monthsA = sorted(structureA[selected_year_A].keys())
-            selected_month_A = st.selectbox("Mes disponible (A)", monthsA, key="monthA")
-            daysA = sorted(structureA[selected_year_A][selected_month_A].keys())
-            selected_day_A = st.selectbox("Día disponible (A)", daysA, key="dayA")
-            files_day_A = structureA[selected_year_A][selected_month_A][selected_day_A]
-            if files_day_A:
-                version_selA = st.selectbox("Seleccione versión A:", files_day_A, key="fileA")
-                if version_selA:
-                    file_pathA = os.path.join(VERSIONS_DIR, selected_year_A, selected_month_A, selected_day_A, version_selA)
-                    if os.path.isfile(file_pathA):
-                        with open(file_pathA, "rb") as excel_file:
-                            excel_bytes = excel_file.read()
-                        st.download_button(
-                            label=f"Descargar {version_selA}",
-                            data=excel_bytes,
-                            file_name=version_selA,
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        )
-                        confirm_text_A = st.text_input(
-                            f"Para confirmar la eliminación de '{version_selA}', escribe 'ELIMINAR'",
-                            key="confirm_elim_A"
-                        )
-                        if st.button("Eliminar esta versión A"):
-                            if confirm_text_A == "ELIMINAR":
-                                try:
-                                    os.remove(file_pathA)
-                                    st.warning(f"Versión '{version_selA}' eliminada.")
-                                    time.sleep(2)
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error(f"Error al intentar eliminar la versión: {e}")
-                            else:
-                                st.error("Confirme la eliminación escribiendo 'ELIMINAR'.")
-            else:
-                st.write("No hay versiones guardadas en este día.")
+            st.write("No hay versiones guardadas de A (excepto la original).")
 
+        # Botón para eliminar TODAS las versiones A (excepto original)
+        confirm_all_A = st.text_input("Para confirmar, escribe 'ELIMINAR'", key="confirm_all_A")
+        if st.button("Eliminar TODAS las versiones A (excepto original)"):
+            if confirm_all_A == "ELIMINAR":
+                for f in versions_no_original:
+                    try:
+                        os.remove(os.path.join(VERSIONS_DIR, f))
+                    except:
+                        pass
+                st.info("Todas las versiones (excepto la original) eliminadas.")
+                time.sleep(2)
+                st.rerun()
+            else:
+                st.error("Debe escribir 'ELIMINAR' para confirmar la acción.")
+
+        # Botón para eliminar TODAS las versiones A excepto la última y la original
+        confirm_partial_A = st.text_input("Para confirmar, escribe 'ELIMINAR'", key="confirm_partial_A")
+        if st.button("Eliminar TODAS las versiones A excepto la última y la original"):
+            if confirm_partial_A == "ELIMINAR":
+                if len(versions_no_original) > 1:
+                    sorted_vers = sorted(versions_no_original)
+                    last_version = sorted_vers[-1]
+                    for f in versions_no_original:
+                        if f != last_version:
+                            try:
+                                os.remove(os.path.join(VERSIONS_DIR, f))
+                            except:
+                                pass
+                    st.info(f"Se han eliminado todas las versiones excepto: {last_version} y Stock_Original.xlsx")
+                    time.sleep(2)
+                    st.rerun()
+                else:
+                    st.write("Solo hay una versión o ninguna versión, no se elimina nada más.")
+            else:
+                st.error("Debe confirmar escribiendo 'ELIMINAR'.")
+        
+        # Botón para limpiar la Base de Datos A
         if st.button("Limpiar Base de Datos A"):
             original_path = os.path.join(VERSIONS_DIR, "Stock_Original.xlsx")
             if os.path.exists(original_path):
@@ -430,53 +379,83 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones Stock (A)", expanded=Fa
         st.error("No hay data_dict. Verifica Stock_Original.xlsx.")
         st.stop()
 
+
 # -------------------------------------------------------------------------
-# Barra lateral => Ver/Gestionar versiones Historial (B)
+# SIDEBAR => GESTIONAR VERSIONES B
 # -------------------------------------------------------------------------
 with st.sidebar.expander("🔎 Ver / Gestionar versiones Historial (B)", expanded=False):
     if st.session_state["data_dict_b"]:
-        structureB = list_files_by_date(VERSIONS_DIR_B)
-        if not structureB:
-            st.write("No hay versiones guardadas en subcarpetas (excepto la original).")
+        files_b = sorted(os.listdir(VERSIONS_DIR_B))
+        versions_no_original_b = [f for f in files_b if f != "Stock_Historico_Original.xlsx"]
+        if versions_no_original_b:
+            version_sel_b = st.selectbox("Seleccione versión B:", versions_no_original_b)
+            if version_sel_b:
+                file_path_b = os.path.join(VERSIONS_DIR_B, version_sel_b)
+                if os.path.isfile(file_path_b):
+                    with open(file_path_b, "rb") as excel_file_b:
+                        excel_bytes_b = excel_file_b.read()
+                    st.download_button(
+                        label=f"Descargar {version_sel_b}",
+                        data=excel_bytes_b,
+                        file_name=version_sel_b,
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+                # Confirmación extra para eliminar la versión B seleccionada
+                confirm_text_B = st.text_input(
+                    f"Para confirmar la eliminación de '{version_sel_b}' (B), escribe 'ELIMINAR'",
+                    key="confirm_elim_B"
+                )
+                if st.button("Eliminar esta versión B"):
+                    if confirm_text_B == "ELIMINAR":
+                        try:
+                            os.remove(file_path_b)
+                            st.warning(f"Versión '{version_sel_b}' eliminada de B.")
+                            time.sleep(2)
+                            st.rerun()
+                        except Exception as e:
+                            st.error("Error al intentar eliminar la versión.")
+                    else:
+                        st.error("Confirme la eliminación escribiendo 'ELIMINAR' en el campo de texto.")
         else:
-            yearsB = sorted(structureB.keys())
-            selected_year_B = st.selectbox("Año disponible (B)", yearsB, key="yearB")
-            monthsB = sorted(structureB[selected_year_B].keys())
-            selected_month_B = st.selectbox("Mes disponible (B)", monthsB, key="monthB")
-            daysB = sorted(structureB[selected_year_B][selected_month_B].keys())
-            selected_day_B = st.selectbox("Día disponible (B)", daysB, key="dayB")
-            files_day_B = structureB[selected_year_B][selected_month_B][selected_day_B]
-            if files_day_B:
-                version_selB = st.selectbox("Seleccione versión B:", files_day_B, key="fileB")
-                if version_selB:
-                    file_pathB = os.path.join(VERSIONS_DIR_B, selected_year_B, selected_month_B, selected_day_B, version_selB)
-                    if os.path.isfile(file_pathB):
-                        with open(file_pathB, "rb") as excel_file_b:
-                            excel_bytes_b = excel_file_b.read()
-                        st.download_button(
-                            label=f"Descargar {version_selB}",
-                            data=excel_bytes_b,
-                            file_name=version_selB,
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        )
-                        confirm_text_B = st.text_input(
-                            f"Para confirmar la eliminación de '{version_selB}', escribe 'ELIMINAR'",
-                            key="confirm_elim_B"
-                        )
-                        if st.button("Eliminar esta versión B"):
-                            if confirm_text_B == "ELIMINAR":
-                                try:
-                                    os.remove(file_pathB)
-                                    st.warning(f"Versión '{version_selB}' eliminada de B.")
-                                    time.sleep(2)
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error(f"Error al intentar eliminar la versión: {e}")
-                            else:
-                                st.error("Confirme la eliminación escribiendo 'ELIMINAR'.")
-            else:
-                st.write("No hay versiones guardadas en este día.")
+            st.write("No hay versiones guardadas de B (excepto la original).")
 
+        # Botón para eliminar TODAS las versiones B (excepto original)
+        confirm_all_B = st.text_input("Para confirmar, escribe 'ELIMINAR'", key="confirm_all_B")
+        if st.button("Eliminar TODAS las versiones B (excepto original)"):
+            if confirm_all_B == "ELIMINAR":
+                for f in versions_no_original_b:
+                    try:
+                        os.remove(os.path.join(VERSIONS_DIR_B, f))
+                    except:
+                        pass
+                st.info("Todas las versiones de B (excepto la original) eliminadas.")
+                time.sleep(2)
+                st.rerun()
+            else:
+                st.error("Debe escribir 'ELIMINAR' para confirmar la acción.")
+
+        # Botón para eliminar TODAS las versiones B excepto la última y la original
+        confirm_partial_B = st.text_input("Para confirmar, escribe 'ELIMINAR'", key="confirm_partial_B")
+        if st.button("Eliminar TODAS las versiones B excepto la última y la original"):
+            if confirm_partial_B == "ELIMINAR":
+                if len(versions_no_original_b) > 1:
+                    sorted_vers_b = sorted(versions_no_original_b)
+                    last_version_b = sorted_vers_b[-1]
+                    for f in versions_no_original_b:
+                        if f != last_version_b:
+                            try:
+                                os.remove(os.path.join(VERSIONS_DIR_B, f))
+                            except:
+                                pass
+                    st.info(f"Se han eliminado todas las versiones excepto: {last_version_b} y Stock_Historico_Original.xlsx")
+                    time.sleep(2)
+                    st.rerun()
+                else:
+                    st.write("Solo hay una versión o ninguna versión, no se elimina nada más.")
+            else:
+                st.error("Debe confirmar escribiendo 'ELIMINAR'.")
+        
+        # Botón para limpiar la Base de Datos B
         if st.button("Limpiar Base de Datos B"):
             original_path_b = os.path.join(VERSIONS_DIR_B, "Stock_Historico_Original.xlsx")
             if os.path.exists(original_path_b):
@@ -490,41 +469,10 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones Historial (B)", expande
     else:
         st.write("No hay data_dict_b. Verifica Stock_Historico.xlsx.")
 
+
 st.markdown("### Información")
 st.write("← Recuerde que en la barra lateral puede gestionar las versiones. Despliegue para consultarlo.")
 st.divider()
-
-# ==============================================================================
-# EJEMPLO DE FUNCIÓN: GUARDAR NUEVA VERSIÓN A
-# ==============================================================================
-def guardar_nueva_version_A():
-    """
-    Ejemplo a modo de demostración. 
-    Imagina que en el botón 'Guardar Cambios' de tu app,
-    llamas a esta función para crear la ruta y guardar el Excel.
-    """
-    new_file = create_dated_version_filename(VERSIONS_DIR, prefix="Stock")
-    #TODO: Guardar tu DF principal en new_file
-    # with pd.ExcelWriter(new_file, engine="openpyxl") as writer:
-    #     df_main.to_excel(writer, index=False, sheet_name="HojaA")
-    st.success(f"Archivo guardado en {new_file}")
-
-# ==============================================================================
-# EJEMPLO DE FUNCIÓN: GUARDAR NUEVA VERSIÓN B
-# ==============================================================================
-def guardar_nueva_version_B():
-    """
-    Similar para la base de datos histórica B.
-    """
-    new_file_b = create_dated_version_filename(VERSIONS_DIR_B, prefix="StockB")
-    # TODO: Guardar tu DF histórico en new_file_b
-    st.success(f"Archivo histórico guardado en {new_file_b}")
-
-
-# -------------------------------------------------------------------------
-# Aquí iría el resto de tu lógica principal de la app, por ejemplo:
-# "Gestión del Stock", "Informar Reactivo Agotado", etc.
-# -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
 # CUERPO PRINCIPAL => Edición en Hoja Principal (A)
@@ -979,6 +927,7 @@ with tabs[2]:
         st.success("✅ Cambios guardados en Hoja A y B (si coincidía).")
         time.sleep(2)
         st.rerun()
+
 
 
 
