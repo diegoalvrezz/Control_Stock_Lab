@@ -9,6 +9,8 @@ from io import BytesIO
 import itertools
 import openpyxl
 import time
+import pytz
+
 
 st.set_page_config(page_title="Control de Stock con Lotes", layout="centered")
 st.title("🔬 Control Stock Lab. Patología Molécular")
@@ -89,8 +91,9 @@ def load_data_a():
         return {}
 
 def crear_nueva_version_filename():
-    fh = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    return os.path.join(VERSIONS_DIR, f"Stock_{fh}.xlsx")
+    zona_local = pytz.timezone('Europe/Madrid')
+
+    fh = datetime.datetime.now(zona_local).strftime("%Y-%m-%d_%H-%M-%S")
 
 # -------------------------------------------------------------------------
 # EXCEL B (Stock_Historico)
