@@ -347,6 +347,7 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones Stock (A)", expanded=Fa
                         except:
                             pass
                 st.info(f"Se han eliminado todas las versiones excepto: {last_version} y Stock_Original.xlsx")
+                time.sleep(2)
                 st.rerun()
             else:
                 st.write("Solo hay una versión o ninguna versión, no se elimina nada más.")
@@ -357,6 +358,7 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones Stock (A)", expanded=Fa
                 shutil.copy(original_path, STOCK_FILE)
                 st.success("Base de datos A restaurada al estado original.")
                 st.session_state["data_dict"] = load_data_a()
+                time.sleep(2)
                 st.rerun()
             else:
                 st.error("No se encontró la copia original de A.")
@@ -392,6 +394,7 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones Historial (B)", expande
                         try:
                             os.remove(file_path_b)
                             st.warning(f"Versión '{version_sel_b}' eliminada de B.")
+                            time.sleep(2)
                             st.rerun()
                         except:
                             st.error("Error al intentar eliminar la versión.")
@@ -407,6 +410,7 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones Historial (B)", expande
                 except:
                     pass
             st.info("Todas las versiones de B (excepto la original) eliminadas.")
+            time.sleep(2)
             st.rerun()
 
         if st.button("Eliminar TODAS las versiones B excepto la última y la original"):
@@ -420,6 +424,7 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones Historial (B)", expande
                         except:
                             pass
                 st.info(f"Se han eliminado todas las versiones excepto: {last_version_b} y Stock_Historico_Original.xlsx")
+                time.sleep(2)
                 st.rerun()
             else:
                 st.write("Solo hay una versión o ninguna versión, no se elimina nada más.")
@@ -430,6 +435,7 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones Historial (B)", expande
                 shutil.copy(original_path_b, STOCK_FILE_B)
                 st.success("Base de datos B restaurada al estado original.")
                 st.session_state["data_dict_b"] = load_data_b()
+                time.sleep(2)
                 st.rerun()
             else:
                 st.error("No se encontró la copia original de B.")
@@ -506,6 +512,7 @@ with colD:
     st.write("")
     st.write("")
     if st.button("Refrescar Página"):
+        
         st.rerun()
 # ---------------------------
 # AÑADIMOS AQUÍ UN CAMPO PARA "Comentario"
@@ -643,6 +650,8 @@ if st.button("Guardar Cambios en Hoja Stock"):
     excel_bytes = generar_excel_en_memoria(df_main, sheet_nm=sheet_name)
     st.download_button("Descargar Excel A modificado", excel_bytes, "Reporte_Stock.xlsx",
                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    
+    time.sleep(2)
     st.rerun()
 
 
@@ -812,6 +821,7 @@ with tabs[2]:
                     for sht_b, df_sht_b in st.session_state["data_dict_b"].items():
                         df_sht_b.to_excel(writer_b, sheet_name=sht_b, index=False)
         st.success("✅ Cambios guardados en Hoja A y B (si coincidía).")
+        time.sleep(2)
         st.rerun()
 
 
