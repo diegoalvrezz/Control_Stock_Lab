@@ -767,7 +767,7 @@ with st.expander("🔎 Filtrar Reactivos en Base B (Limitantes vs. Compartidos)"
     # 1) Definimos el set de referencias "limitantes"
     limitantes_set = {
         "A42006","A42007","A27762","A34018","A33638","A33639","A27758","A27765","A4517",
-        "A3410","A34537","A45617","A34540","A36410","A29025","A29027","A29026","A27754"
+        "A3410","A34537","A45617","A34540","A36410","A29025","A29027","A29026","A27754","11754050","11766050"
         # Puedes añadir o quitar de esta lista. Duplicados se ignoran (al usar un set).
     }
 
