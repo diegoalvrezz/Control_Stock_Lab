@@ -10,6 +10,7 @@ import itertools
 import openpyxl
 
 st.set_page_config(page_title="Control de Stock con Lotes", layout="centered")
+st.title("🔬 Control Stock Lab. Patología Molécular")
 
 # ---------------------------
 # Autenticación (estructura actualizada)
@@ -576,13 +577,13 @@ with st.sidebar.expander("🔎 Filtrar Reactivos Limitantes/Compartidos", expand
 # -------------------------------------------------------------------------
 # REACTIVO AGOTADO (Consumido en Lab) => st.session_state
 # -------------------------------------------------------------------------
-st.title("🔬 Control Stock Lab. Patología Molécular")
+
 
 if not st.session_state["data_dict"]:
     st.error("No se pudo cargar la base de datos (A).")
     st.stop()
 
-with st.expander("Informar Reactivo Agotado", expanded=False):
+with st.sidebar.expander("Informar Reactivo Agotado", expanded=False):
     hojas_a = list(st.session_state["data_dict"].keys())
     hoja_sel = st.selectbox("Hoja A a consumir:", hojas_a)
     
