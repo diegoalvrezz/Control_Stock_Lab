@@ -13,6 +13,55 @@ import time
 st.set_page_config(page_title="Control de Stock con Lotes", layout="centered")
 st.title("🔬 Control Stock Lab. Patología Molécular")
 
+def build_group_info_by_ref(df: pd.DataFrame, panel_default: str = None) -> pd.DataFrame:
+    """
+    Agrupa registros por 'Ref. Saturno', les asigna color y marca
+    cuál es la fila título en cada grupo de referencia, entre otras lógicas.
+
+    :param df: DataFrame a procesar.
+    :param panel_default: Nombre del panel (ej. 'FOCUS', 'OCA', etc.)
+                         para buscar títulos en la estructura LOTS_DATA.
+    :return: DataFrame con columnas adicionales como 'GroupID', 'EsTitulo', etc.
+    """
+    df = df.copy()
+    df["GroupID"] = df["Ref. Saturno"]
+    group_sizes = df.groupby("GroupID").size().to_dict()
+    df["GroupCount"] = df["GroupID"].apply(lambda x: group_sizes.get(x, 0))
+
+    # Aquí asignamos colores cíclicos
+    unique_ids = sorted(df["GroupID"].unique())
+    color_cycle_local = itertools.cycle([
+        "#FED7D7", "#FEE2E2", "#FFEDD5", "#FEF9C3", "#D9F99D", "#CFFAFE",
+        "#E0E7FF", "#FBCFE8", "#F9A8D4", "#E9D5FF", "#FFD700", "#F0FFF0",
+        "#D1FAE5", "#BAFEE2", "#A7F3D0", "#FFEC99"
+    ])
+    group_color_map = {}
+    for gid in unique_ids:
+        group_color_map[gid] = next(color_cycle_local)
+    df["ColorGroup"] = df["GroupID"].apply(lambda x: group_color_map.get(x,"#FFFFFF"))
+
+    # Asignamos cuál es la fila título
+    group_titles = []
+    if panel_default in LOTS_DATA:
+        group_titles = [t.strip().lower() for t in LOTS_DATA[panel_default].keys()]
+
+    df["EsTitulo"] = False
+    for gid, group_df in df.groupby("GroupID"):
+        mask = group_df["Nombre producto"].str.strip().str.lower().isin(group_titles)
+        if mask.any():
+            idxs = group_df[mask].index
+            df.loc[idxs, "EsTitulo"] = True
+        else:
+            first_idx = group_df.index[0]
+            df.at[first_idx, "EsTitulo"] = True
+
+    # Usamos columnas auxiliares para orden
+    df["MultiSort"] = df["GroupCount"].apply(lambda x: 0 if x > 1 else 1)
+    df["NotTitulo"] = df["EsTitulo"].apply(lambda x: 0 if x else 1)
+
+    return df
+
+
 def calc_alarma(row):
     """
     Devuelve un string con un ícono de alerta:
