@@ -580,7 +580,9 @@ group_order_selected = None
 if st.button("Guardar Cambios en Hoja Stock"):
     if pd.notna(flleg_new):
         fped_new = pd.NaT
+
     if "Stock" in df_main.columns:
+        # Si el usuario modificó la fecha de llegada (o cambió el lote), sumamos uds_actual al stock_actual
         if (
             (flleg_new != fecha_llegada_actual and pd.notna(flleg_new))
             or
@@ -588,53 +590,65 @@ if st.button("Guardar Cambios en Hoja Stock"):
         ):
             df_main.at[row_index, "Stock"] = stock_actual + uds_actual
             st.info(f"Añadidas {uds_actual} uds => stock={stock_actual + uds_actual}")
+
     if "NºLote" in df_main.columns:
-        df_main.at[row_index,"NºLote"] = str(lote_new)
+        df_main.at[row_index, "NºLote"] = str(lote_new)
     if "Caducidad" in df_main.columns:
-        df_main.at[row_index,"Caducidad"] = cad_new if pd.notna(cad_new) else pd.NaT
+        df_main.at[row_index, "Caducidad"] = cad_new if pd.notna(cad_new) else pd.NaT
     if "Fecha Pedida" in df_main.columns:
-        df_main.at[row_index,"Fecha Pedida"] = fped_new
+        df_main.at[row_index, "Fecha Pedida"] = fped_new
     if "Fecha Llegada" in df_main.columns:
-        df_main.at[row_index,"Fecha Llegada"] = flleg_new
+        df_main.at[row_index, "Fecha Llegada"] = flleg_new
     if "Sitio almacenaje" in df_main.columns:
-        df_main.at[row_index,"Sitio almacenaje"] = sitio_new
+        df_main.at[row_index, "Sitio almacenaje"] = sitio_new
     if "Comentario" not in df_main.columns:
         df_main["Comentario"] = ""
-    df_main.at[row_index,"Comentario"] = comentario_nuevo
-    if pd.notna(fped_new) and group_order_selected:
+    df_main.at[row_index, "Comentario"] = comentario_nuevo
+
+    # Actualizamos "Fecha Pedida" para todos los reactivos seleccionados.
+    # Si el multiselect quedó vacío, usamos todas las opciones generadas (es decir, actualizamos todo el grupo).
+    if pd.notna(fped_new):
+        if not group_order_selected:
+            # group_order_selected se obtiene anteriormente en el multiselect.
+            # En caso de que esté vacío, usamos todas las opciones (almacenadas en 'options')
+            group_order_selected = options  # 'options' se definió al crear el multiselect.
         for label in group_order_selected:
             try:
                 i_val = int(label.split(" - ")[0])
-                df_main.at[i_val,"Fecha Pedida"] = fped_new
+                df_main.at[i_val, "Fecha Pedida"] = fped_new
             except Exception as e:
                 st.error(f"Error actualizando índice {label}: {e}")
+
     st.session_state["data_dict"][sheet_name] = df_main
+
     new_file = crear_nueva_version_filename()
     with pd.ExcelWriter(new_file, engine="openpyxl") as writer:
         for sht, df_sht in st.session_state["data_dict"].items():
-            ocultar=["ColorGroup","EsTitulo","GroupCount","MultiSort","NotTitulo","GroupID","Alarma"]
+            ocultar = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID", "Alarma"]
             tmp = df_sht.drop(columns=ocultar, errors="ignore")
             tmp.to_excel(writer, sheet_name=sht, index=False)
     with pd.ExcelWriter(STOCK_FILE, engine="openpyxl") as writer:
         for sht, df_sht in st.session_state["data_dict"].items():
-            ocultar=["ColorGroup","EsTitulo","GroupCount","MultiSort","Notitulo","GroupID","Alarma"]
+            ocultar = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID", "Alarma"]
             tmp = df_sht.drop(columns=ocultar, errors="ignore")
             tmp.to_excel(writer, sheet_name=sht, index=False)
+
+    # Insertar en B
     if sheet_name not in st.session_state["data_dict_b"]:
         st.session_state["data_dict_b"][sheet_name] = pd.DataFrame()
     df_b_sh = st.session_state["data_dict_b"][sheet_name].copy()
     nueva_fila = {
-        "Ref. Saturno": df_main.at[row_index,"Ref. Saturno"] if "Ref. Saturno" in df_main.columns else 0,
-        "Ref. Fisher": df_main.at[row_index,"Ref. Fisher"] if "Ref. Fisher" in df_main.columns else "",
-        "Nombre producto": df_main.at[row_index,"Nombre producto"] if "Nombre producto" in df_main.columns else "",
-        "NºLote": df_main.at[row_index,"NºLote"],
-        "Caducidad": df_main.at[row_index,"Caducidad"],
-        "Fecha Pedida": df_main.at[row_index,"Fecha Pedida"],
-        "Fecha Llegada": df_main.at[row_index,"Fecha Llegada"],
-        "Sitio almacenaje": df_main.at[row_index,"Sitio almacenaje"],
-        "Uds.": df_main.at[row_index,"Uds."] if "Uds." in df_main.columns else 0,
-        "Stock": df_main.at[row_index,"Stock"] if "Stock" in df_main.columns else 0,
-        "Comentario": df_main.at[row_index,"Comentario"] if "Comentario" in df_main.columns else "",
+        "Ref. Saturno": df_main.at[row_index, "Ref. Saturno"] if "Ref. Saturno" in df_main.columns else 0,
+        "Ref. Fisher": df_main.at[row_index, "Ref. Fisher"] if "Ref. Fisher" in df_main.columns else "",
+        "Nombre producto": df_main.at[row_index, "Nombre producto"] if "Nombre producto" in df_main.columns else "",
+        "NºLote": df_main.at[row_index, "NºLote"],
+        "Caducidad": df_main.at[row_index, "Caducidad"],
+        "Fecha Pedida": df_main.at[row_index, "Fecha Pedida"],
+        "Fecha Llegada": df_main.at[row_index, "Fecha Llegada"],
+        "Sitio almacenaje": df_main.at[row_index, "Sitio almacenaje"],
+        "Uds.": df_main.at[row_index, "Uds."] if "Uds." in df_main.columns else 0,
+        "Stock": df_main.at[row_index, "Stock"] if "Stock" in df_main.columns else 0,
+        "Comentario": df_main.at[row_index, "Comentario"] if "Comentario" in df_main.columns else "",
         "Fecha Registro B": datetime.datetime.now()
     }
     df_b_sh = pd.concat([df_b_sh, pd.DataFrame([nueva_fila])], ignore_index=True)
@@ -646,6 +660,7 @@ if st.button("Guardar Cambios en Hoja Stock"):
     with pd.ExcelWriter(STOCK_FILE_B, engine="openpyxl") as writerB:
         for shtB, df_shtB in st.session_state["data_dict_b"].items():
             df_shtB.to_excel(writerB, sheet_name=shtB, index=False)
+
     st.success(f"✅ Cambios guardados en '{new_file}' y '{STOCK_FILE}' (A). También en '{new_file_b}' y '{STOCK_FILE_B}' (B).")
     excel_bytes = generar_excel_en_memoria(df_main, sheet_nm=sheet_name)
     st.download_button("Descargar Excel A modificado", excel_bytes, "Reporte_Stock.xlsx",
