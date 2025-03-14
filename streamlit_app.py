@@ -585,6 +585,8 @@ else:
 reactivo_sel = st.selectbox("Selecciona Reactivo a Modificar:", display_series.unique(), key="react_modif")
 row_index = display_series[display_series == reactivo_sel].index[0]
 
+st.write("Recuerde que no es necesario ingresar la fecha pedida si se está ingresando la fecha llegada")
+
 def get_val(col, default=None):
     return df_main.at[row_index, col] if col in df_main.columns else default
 
@@ -609,10 +611,10 @@ with colB:
                               value=fecha_pedida_actual.time() if pd.notna(fecha_pedida_actual) else datetime.time(0,0),
                               key="fped_time_main")
 with colC:
-    flleg_date = st.date_input("Fecha Llegada",
+    flleg_date = st.date_input("Fecha Llegada (opcional)",
                                value=fecha_llegada_actual.date() if pd.notna(fecha_llegada_actual) else None,
                                key="flleg_date_main")
-    flleg_time = st.time_input("Hora Llegada",
+    flleg_time = st.time_input("Hora Llegada (opcional)",
                                value=fecha_llegada_actual.time() if pd.notna(fecha_llegada_actual) else datetime.time(0,0),
                                key="flleg_time_main")
 with colD:
