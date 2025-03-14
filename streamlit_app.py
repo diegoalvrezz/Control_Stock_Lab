@@ -91,9 +91,10 @@ def load_data_a():
         return {}
 
 def crear_nueva_version_filename():
-    zona_local = pytz.timezone('Europe/Madrid')
-
+    zona_local = pytz.timezone('Europe/Madrid')  # ajusta a tu zona
     fh = datetime.datetime.now(zona_local).strftime("%Y-%m-%d_%H-%M-%S")
+    return os.path.join(VERSIONS_DIR, f"Stock_{fh}.xlsx")
+
 
 # -------------------------------------------------------------------------
 # EXCEL B (Stock_Historico)
