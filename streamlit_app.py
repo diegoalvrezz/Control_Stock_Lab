@@ -164,18 +164,92 @@ def load_data_b():
     except:
         return {}
 
-# -------------------------------------------------------------------------
-# USAR st.session_state
-# -------------------------------------------------------------------------
+
+# ==============================================================================
+# Inicialización de Session State
+# ==============================================================================
 if "data_dict" not in st.session_state:
     st.session_state["data_dict"] = load_data_a()
 
 if "data_dict_b" not in st.session_state:
     st.session_state["data_dict_b"] = load_data_b()
 
-data_dict = st.session_state["data_dict"]
-data_dict_b = st.session_state["data_dict_b"]
+# ==============================================================================
+# FUNCIONES PARA CREAR RUTAS FECHADAS (AÑO/MES/DÍA) Y LISTARLAS
+# ==============================================================================
+def create_dated_version_filename(base_dir, prefix="Stock"):
+    """
+    Crea subdirectorios en base a Año/Mes/Día dentro de `base_dir`,
+    y devuelve la ruta completa para guardar un nuevo archivo Excel.
 
+    Ejemplo de ruta generada:
+       versions/2025/03/14/Stock_2025-03-14_14-09-50.xlsx
+    """
+    now = datetime.datetime.now()
+    year_str = str(now.year)         # 2025, 2026, etc.
+    month_str = now.strftime("%m")   # '03', '04', etc.
+    day_str = now.strftime("%d")     # '01', '02', etc.
+
+    # Construimos subdirectorios
+    year_dir = os.path.join(base_dir, year_str)
+    month_dir = os.path.join(year_dir, month_str)
+    day_dir = os.path.join(month_dir, day_str)
+
+    os.makedirs(day_dir, exist_ok=True)
+
+    # Generamos nombre del archivo
+    timestamp = now.strftime("%Y-%m-%d_%H-%M-%S")
+    filename = f"{prefix}_{timestamp}.xlsx"
+
+    return os.path.join(day_dir, filename)
+
+def list_files_by_date(base_dir):
+    """
+    Recorre recursivamente el directorio base_dir organizado en subcarpetas Año/Mes/Día,
+    y retorna una estructura anidada:
+    {
+      '2025': {
+         '03': {
+            '14': [ 'Stock_2025-03-14_14-09-50.xlsx', ... ],
+            '15': [...],
+         },
+         ...
+      },
+      '2026': ...
+    }
+    """
+    date_structure = {}
+    if not os.path.exists(base_dir):
+        return date_structure
+
+    for year in sorted(os.listdir(base_dir)):
+        year_path = os.path.join(base_dir, year)
+        if not os.path.isdir(year_path):
+            continue
+        if year not in date_structure:
+            date_structure[year] = {}
+
+        for month in sorted(os.listdir(year_path)):
+            month_path = os.path.join(year_path, month)
+            if not os.path.isdir(month_path):
+                continue
+            if month not in date_structure[year]:
+                date_structure[year][month] = {}
+
+            for day in sorted(os.listdir(month_path)):
+                day_path = os.path.join(month_path, day)
+                if not os.path.isdir(day_path):
+                    continue
+                if day not in date_structure[year][month]:
+                    date_structure[year][month][day] = []
+
+                # Añadimos los archivos .xlsx
+                for fname in sorted(os.listdir(day_path)):
+                    fpath = os.path.join(day_path, fname)
+                    if os.path.isfile(fpath) and fname.endswith(".xlsx"):
+                        date_structure[year][month][day].append(fname)
+
+    return date_structure
 # -------------------------------------------------------------------------
 # LÓGICA DE LOTES Y ESTILOS
 # -------------------------------------------------------------------------
@@ -289,82 +363,67 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# -------------------------------------------------------------------------
-# SIDEBAR => GESTIONAR VERSIONES DE A
-# -------------------------------------------------------------------------
+# ==============================================================================
+# DEMO DE LA BARRA LATERAL => GESTIONAR VERSIONES A
+# ==============================================================================
 with st.sidebar.expander("🔎 Ver / Gestionar versiones Stock (A)", expanded=False):
     if st.session_state["data_dict"]:
-        files = sorted(os.listdir(VERSIONS_DIR))
-        versions_no_original = [f for f in files if f != "Stock_Original.xlsx"]
-        if versions_no_original:
-            version_sel = st.selectbox("Seleccione versión A:", versions_no_original)
-            if version_sel:
-                file_path = os.path.join(VERSIONS_DIR, version_sel)
-                if os.path.isfile(file_path):
-                    with open(file_path, "rb") as excel_file:
-                        excel_bytes = excel_file.read()
-                    st.download_button(
-                        label=f"Descargar {version_sel}",
-                        data=excel_bytes,
-                        file_name=version_sel,
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
-                # Confirmación extra para eliminar la versión A seleccionada
-                confirm_text_A = st.text_input(
-                    f"Para confirmar la eliminación de '{version_sel}', escribe 'ELIMINAR'",
-                    key="confirm_elim_A"
-                )
-                if st.button("Eliminar esta versión A"):
-                    if confirm_text_A == "ELIMINAR":
-                        try:
-                            os.remove(file_path)
-                            st.warning(f"Versión '{version_sel}' eliminada.")
-                            time.sleep(2)
-                            st.rerun()
-                        except Exception as e:
-                            st.error("Error al intentar eliminar la versión.")
-                    else:
-                        st.error("Confirme la eliminación escribiendo 'ELIMINAR' en el campo de texto.")
+        # Listamos la estructura A
+        structureA = list_files_by_date(VERSIONS_DIR)
+
+        if not structureA:
+            st.write("No hay versiones guardadas en subcarpetas (excepto la original).")
         else:
-            st.write("No hay versiones guardadas de A (excepto la original).")
-
-        # Botón para eliminar TODAS las versiones A (excepto original)
-        confirm_all_A = st.text_input("Para confirmar, escribe 'ELIMINAR'", key="confirm_all_A")
-        if st.button("Eliminar TODAS las versiones A (excepto original)"):
-            if confirm_all_A == "ELIMINAR":
-                for f in versions_no_original:
-                    try:
-                        os.remove(os.path.join(VERSIONS_DIR, f))
-                    except:
-                        pass
-                st.info("Todas las versiones (excepto la original) eliminadas.")
-                time.sleep(2)
-                st.rerun()
+            # 1) Elige año
+            yearsA = sorted(structureA.keys())
+            selected_year_A = st.selectbox("Año disponible (A)", yearsA, key="yearA")
+            # 2) Elige mes
+            monthsA = sorted(structureA[selected_year_A].keys())
+            selected_month_A = st.selectbox("Mes disponible (A)", monthsA, key="monthA")
+            # 3) Elige día
+            daysA = sorted(structureA[selected_year_A][selected_month_A].keys())
+            selected_day_A = st.selectbox("Día disponible (A)", daysA, key="dayA")
+            # 4) Elige archivo
+            files_day_A = structureA[selected_year_A][selected_month_A][selected_day_A]
+            if files_day_A:
+                version_selA = st.selectbox("Seleccione versión A:", files_day_A, key="fileA")
+                if version_selA:
+                    # Ruta completa
+                    file_pathA = os.path.join(
+                        VERSIONS_DIR,
+                        selected_year_A, selected_month_A, selected_day_A,
+                        version_selA
+                    )
+                    if os.path.isfile(file_pathA):
+                        # Botón de descarga
+                        with open(file_pathA, "rb") as excel_file:
+                            excel_bytes = excel_file.read()
+                        st.download_button(
+                            label=f"Descargar {version_selA}",
+                            data=excel_bytes,
+                            file_name=version_selA,
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
+                        # Botón eliminar
+                        confirm_text_A = st.text_input(
+                            f"Para confirmar la eliminación de '{version_selA}', escribe 'ELIMINAR'",
+                            key="confirm_elim_A"
+                        )
+                        if st.button("Eliminar esta versión A"):
+                            if confirm_text_A == "ELIMINAR":
+                                try:
+                                    os.remove(file_pathA)
+                                    st.warning(f"Versión '{version_selA}' eliminada.")
+                                    time.sleep(2)
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Error al intentar eliminar la versión: {e}")
+                            else:
+                                st.error("Confirme la eliminación escribiendo 'ELIMINAR'.")
             else:
-                st.error("Debe escribir 'ELIMINAR' para confirmar la acción.")
+                st.write("No hay versiones guardadas en este día.")
 
-        # Botón para eliminar TODAS las versiones A excepto la última y la original
-        confirm_partial_A = st.text_input("Para confirmar, escribe 'ELIMINAR'", key="confirm_partial_A")
-        if st.button("Eliminar TODAS las versiones A excepto la última y la original"):
-            if confirm_partial_A == "ELIMINAR":
-                if len(versions_no_original) > 1:
-                    sorted_vers = sorted(versions_no_original)
-                    last_version = sorted_vers[-1]
-                    for f in versions_no_original:
-                        if f != last_version:
-                            try:
-                                os.remove(os.path.join(VERSIONS_DIR, f))
-                            except:
-                                pass
-                    st.info(f"Se han eliminado todas las versiones excepto: {last_version} y Stock_Original.xlsx")
-                    time.sleep(2)
-                    st.rerun()
-                else:
-                    st.write("Solo hay una versión o ninguna versión, no se elimina nada más.")
-            else:
-                st.error("Debe confirmar escribiendo 'ELIMINAR'.")
-        
-        # Botón para limpiar la Base de Datos A
+        # Botón para limpiar la Base de Datos A (restaura Stock_Original.xlsx)
         if st.button("Limpiar Base de Datos A"):
             original_path = os.path.join(VERSIONS_DIR, "Stock_Original.xlsx")
             if os.path.exists(original_path):
@@ -379,83 +438,67 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones Stock (A)", expanded=Fa
         st.error("No hay data_dict. Verifica Stock_Original.xlsx.")
         st.stop()
 
-
-# -------------------------------------------------------------------------
-# SIDEBAR => GESTIONAR VERSIONES B
-# -------------------------------------------------------------------------
+# ==============================================================================
+# DEMO DE LA BARRA LATERAL => GESTIONAR VERSIONES B
+# ==============================================================================
 with st.sidebar.expander("🔎 Ver / Gestionar versiones Historial (B)", expanded=False):
     if st.session_state["data_dict_b"]:
-        files_b = sorted(os.listdir(VERSIONS_DIR_B))
-        versions_no_original_b = [f for f in files_b if f != "Stock_Historico_Original.xlsx"]
-        if versions_no_original_b:
-            version_sel_b = st.selectbox("Seleccione versión B:", versions_no_original_b)
-            if version_sel_b:
-                file_path_b = os.path.join(VERSIONS_DIR_B, version_sel_b)
-                if os.path.isfile(file_path_b):
-                    with open(file_path_b, "rb") as excel_file_b:
-                        excel_bytes_b = excel_file_b.read()
-                    st.download_button(
-                        label=f"Descargar {version_sel_b}",
-                        data=excel_bytes_b,
-                        file_name=version_sel_b,
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
-                # Confirmación extra para eliminar la versión B seleccionada
-                confirm_text_B = st.text_input(
-                    f"Para confirmar la eliminación de '{version_sel_b}' (B), escribe 'ELIMINAR'",
-                    key="confirm_elim_B"
-                )
-                if st.button("Eliminar esta versión B"):
-                    if confirm_text_B == "ELIMINAR":
-                        try:
-                            os.remove(file_path_b)
-                            st.warning(f"Versión '{version_sel_b}' eliminada de B.")
-                            time.sleep(2)
-                            st.rerun()
-                        except Exception as e:
-                            st.error("Error al intentar eliminar la versión.")
-                    else:
-                        st.error("Confirme la eliminación escribiendo 'ELIMINAR' en el campo de texto.")
+        # Listamos la estructura B
+        structureB = list_files_by_date(VERSIONS_DIR_B)
+
+        if not structureB:
+            st.write("No hay versiones guardadas en subcarpetas (excepto la original).")
         else:
-            st.write("No hay versiones guardadas de B (excepto la original).")
-
-        # Botón para eliminar TODAS las versiones B (excepto original)
-        confirm_all_B = st.text_input("Para confirmar, escribe 'ELIMINAR'", key="confirm_all_B")
-        if st.button("Eliminar TODAS las versiones B (excepto original)"):
-            if confirm_all_B == "ELIMINAR":
-                for f in versions_no_original_b:
-                    try:
-                        os.remove(os.path.join(VERSIONS_DIR_B, f))
-                    except:
-                        pass
-                st.info("Todas las versiones de B (excepto la original) eliminadas.")
-                time.sleep(2)
-                st.rerun()
+            # 1) Elige año
+            yearsB = sorted(structureB.keys())
+            selected_year_B = st.selectbox("Año disponible (B)", yearsB, key="yearB")
+            # 2) Elige mes
+            monthsB = sorted(structureB[selected_year_B].keys())
+            selected_month_B = st.selectbox("Mes disponible (B)", monthsB, key="monthB")
+            # 3) Elige día
+            daysB = sorted(structureB[selected_year_B][selected_month_B].keys())
+            selected_day_B = st.selectbox("Día disponible (B)", daysB, key="dayB")
+            # 4) Elige archivo
+            files_day_B = structureB[selected_year_B][selected_month_B][selected_day_B]
+            if files_day_B:
+                version_selB = st.selectbox("Seleccione versión B:", files_day_B, key="fileB")
+                if version_selB:
+                    # Ruta completa
+                    file_pathB = os.path.join(
+                        VERSIONS_DIR_B,
+                        selected_year_B, selected_month_B, selected_day_B,
+                        version_selB
+                    )
+                    if os.path.isfile(file_pathB):
+                        # Botón de descarga
+                        with open(file_pathB, "rb") as excel_file_b:
+                            excel_bytes_b = excel_file_b.read()
+                        st.download_button(
+                            label=f"Descargar {version_selB}",
+                            data=excel_bytes_b,
+                            file_name=version_selB,
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
+                        # Botón eliminar
+                        confirm_text_B = st.text_input(
+                            f"Para confirmar la eliminación de '{version_selB}', escribe 'ELIMINAR'",
+                            key="confirm_elim_B"
+                        )
+                        if st.button("Eliminar esta versión B"):
+                            if confirm_text_B == "ELIMINAR":
+                                try:
+                                    os.remove(file_pathB)
+                                    st.warning(f"Versión '{version_selB}' eliminada de B.")
+                                    time.sleep(2)
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Error al intentar eliminar la versión: {e}")
+                            else:
+                                st.error("Confirme la eliminación escribiendo 'ELIMINAR'.")
             else:
-                st.error("Debe escribir 'ELIMINAR' para confirmar la acción.")
+                st.write("No hay versiones guardadas en este día.")
 
-        # Botón para eliminar TODAS las versiones B excepto la última y la original
-        confirm_partial_B = st.text_input("Para confirmar, escribe 'ELIMINAR'", key="confirm_partial_B")
-        if st.button("Eliminar TODAS las versiones B excepto la última y la original"):
-            if confirm_partial_B == "ELIMINAR":
-                if len(versions_no_original_b) > 1:
-                    sorted_vers_b = sorted(versions_no_original_b)
-                    last_version_b = sorted_vers_b[-1]
-                    for f in versions_no_original_b:
-                        if f != last_version_b:
-                            try:
-                                os.remove(os.path.join(VERSIONS_DIR_B, f))
-                            except:
-                                pass
-                    st.info(f"Se han eliminado todas las versiones excepto: {last_version_b} y Stock_Historico_Original.xlsx")
-                    time.sleep(2)
-                    st.rerun()
-                else:
-                    st.write("Solo hay una versión o ninguna versión, no se elimina nada más.")
-            else:
-                st.error("Debe confirmar escribiendo 'ELIMINAR'.")
-        
-        # Botón para limpiar la Base de Datos B
+        # Botón para limpiar Base de Datos B (restaura Stock_Historico_Original.xlsx)
         if st.button("Limpiar Base de Datos B"):
             original_path_b = os.path.join(VERSIONS_DIR_B, "Stock_Historico_Original.xlsx")
             if os.path.exists(original_path_b):
@@ -473,6 +516,33 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones Historial (B)", expande
 st.markdown("### Información")
 st.write("← Recuerde que en la barra lateral puede gestionar las versiones. Despliegue para consultarlo.")
 st.divider()
+
+# ==============================================================================
+# EJEMPLO DE FUNCIÓN: GUARDAR NUEVA VERSIÓN A
+# ==============================================================================
+def guardar_nueva_version_A():
+    """
+    Ejemplo a modo de demostración. 
+    Imagina que en el botón \"Guardar Cambios\" de tu app,
+    llamas a esta función para crear la ruta y guardar el Excel.
+    """
+    new_file = create_dated_version_filename(VERSIONS_DIR, prefix="Stock")
+    # Aquí pones el código para guardar el DataFrame principal en new_file
+    # p.ej:
+    # with pd.ExcelWriter(new_file, engine="openpyxl") as writer:
+    #     df_main.to_excel(writer, index=False, sheet_name="HojaA")
+    st.success(f"Archivo guardado en {new_file}")
+
+# ==============================================================================
+# EJEMPLO DE FUNCIÓN: GUARDAR NUEVA VERSIÓN B
+# ==============================================================================
+def guardar_nueva_version_B():
+    """
+    Similar para la base de datos histórica B.
+    """
+    new_file_b = create_dated_version_filename(VERSIONS_DIR_B, prefix="StockB")
+    # Guardar el DataFrame histórico en new_file_b
+    st.success(f"Archivo histórico guardado en {new_file_b}")
 
 # -------------------------------------------------------------------------
 # CUERPO PRINCIPAL => Edición en Hoja Principal (A)
