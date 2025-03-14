@@ -520,6 +520,25 @@ if fped_date is not None:
     dt_ped = datetime.datetime.combine(fped_date, fped_time)
     fped_new = pd.to_datetime(dt_ped)
 flleg_new = None
+
+if pd.notna(fped_new):
+    group_id = df_for_style.at[row_index,"GroupID"]
+    group_reactivos = df_for_style[df_for_style["GroupID"]==group_id]
+    if not group_reactivos.empty:
+        if group_reactivos["EsTitulo"].any():
+            lot_name = group_reactivos[group_reactivos["EsTitulo"]==True]["Nombre producto"].iloc[0]
+        else:
+            lot_name = f"Ref. Saturno {group_id}"
+        group_reactivos_reset = group_reactivos.reset_index()
+        options = group_reactivos_reset.apply(lambda r: f"{r['index']} - {r['Nombre producto']} ({r['Ref. Fisher']})", axis=1).tolist()
+        st.markdown('<div class="big-select">', unsafe_allow_html=True)
+        group_order_selected = st.multiselect(
+            f"¿Pedir también los siguientes reactivos del lote **{lot_name}**?",
+            options,
+            default=options
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
+
 if flleg_date is not None:
     dt_lleg = datetime.datetime.combine(flleg_date, flleg_time)
     flleg_new = pd.to_datetime(dt_lleg)
@@ -547,23 +566,7 @@ if subopc:
 else:
     sitio_new = sel_top
 group_order_selected = None
-if pd.notna(fped_new):
-    group_id = df_for_style.at[row_index,"GroupID"]
-    group_reactivos = df_for_style[df_for_style["GroupID"]==group_id]
-    if not group_reactivos.empty:
-        if group_reactivos["EsTitulo"].any():
-            lot_name = group_reactivos[group_reactivos["EsTitulo"]==True]["Nombre producto"].iloc[0]
-        else:
-            lot_name = f"Ref. Saturno {group_id}"
-        group_reactivos_reset = group_reactivos.reset_index()
-        options = group_reactivos_reset.apply(lambda r: f"{r['index']} - {r['Nombre producto']} ({r['Ref. Fisher']})", axis=1).tolist()
-        st.markdown('<div class="big-select">', unsafe_allow_html=True)
-        group_order_selected = st.multiselect(
-            f"¿Pedir también los siguientes reactivos del lote **{lot_name}**?",
-            options,
-            default=options
-        )
-        st.markdown('</div>', unsafe_allow_html=True)
+
 if st.button("Guardar Cambios en Hoja Stock"):
     if pd.notna(flleg_new):
         fped_new = pd.NaT
