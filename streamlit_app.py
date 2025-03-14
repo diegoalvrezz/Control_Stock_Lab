@@ -723,15 +723,20 @@ with tabs[0]:
 
 with tabs[1]:
     st.write("### Filtrar Reactivos Limitantes/Compartidos")
-    # 1) Definimos el set de referencias "limitantes"
+
+    # 1) Definir set de referencias \"limitantes\"
     limitantes_set = {
         "A42006","A42007","A27762","A34018","A33638","A33639","A27758","A27765","A4517",
         "A3410","A34537","A45617","A34540","A36410","A29025","A29027","A29026","A27754",
         "11754050","11766050"
     }
+
+    # Verificar si df B está vacío
     if not st.session_state["data_dict_b"]:
         st.warning("No hay datos en base B. Verifica que Stock_Historico.xlsx tenga contenido.")
         st.stop()
+
+    # Concatenar todas las hojas de B en un solo DataFrame
     all_rows_b = []
     for sheet_b, df_b_sht in st.session_state["data_dict_b"].items():
         temp_df = df_b_sht.copy()
@@ -739,57 +744,83 @@ with tabs[1]:
         all_rows_b.append(temp_df)
     df_b_combined = pd.concat(all_rows_b, ignore_index=True)
     df_b_combined = enforce_types(df_b_combined)
+
+    # 2) Extraer (Ref. Fisher, Nombre producto) sin la hoja => para unificar
     refs_info = []
     for idx, row in df_b_combined.iterrows():
         ref = str(row["Ref. Fisher"]) if "Ref. Fisher" in row else ""
         nom = str(row["Nombre producto"]) if "Nombre producto" in row else ""
-        hoja = str(row["(Hoja B)"]) if "(Hoja B)" in row else "??"
         if ref or nom:
-            refs_info.append((ref.strip(), nom.strip(), hoja.strip()))
-    unique_triples = set(refs_info)
+            refs_info.append((ref.strip(), nom.strip()))
+
+    # 3) Crear un conjunto (para evitar duplicados)
+    unique_pairs = set(refs_info)
+
+    # 4) Clasificar en limitantes_list y compartidos_list
     limitantes_list = []
     compartidos_list = []
-    for (ref_fish, nom_prod, hoja_orig) in unique_triples:
-        if ref_fish.strip().upper() == "A":
+
+    # Evitar \"A\" o referencias vacías
+    for (ref_fish, nom_prod) in unique_pairs:
+        if ref_fish.strip().upper() == "A" or not ref_fish:
             continue
         if ref_fish in limitantes_set:
-            limitantes_list.append((ref_fish, nom_prod, hoja_orig))
+            limitantes_list.append((ref_fish, nom_prod))
         else:
-            compartidos_list.append((ref_fish, nom_prod, hoja_orig))
+            compartidos_list.append((ref_fish, nom_prod))
+
+    # 5) Radio para elegir grupo
     grupo_elegido = st.radio("¿Qué grupo de reactivos quiere filtrar?", ("limitante", "compartido"), key="grupo_filtrar")
+
     if grupo_elegido == "limitante":
         op_list = limitantes_list
     else:
         op_list = compartidos_list
+
+    # Si no hay nada, aviso
     if not op_list:
         st.warning(f"No se encontraron reactivos en la categoría '{grupo_elegido}' dentro de la base B.")
         st.stop()
+
+    # Para mostrar \"Ref - Nombre\"
     def display_label(tup):
-        lab = f"{tup[0]} - {tup[1]}"
-        if tup[2]:
-            lab += f" ({tup[2]})"
-        return lab
+        # tup => (ref_fish, nom_prod)
+        return f"{tup[0]} - {tup[1]}"
+
     seleccion = st.selectbox(
         "Seleccione Reactivo",
         [display_label(t) for t in op_list],
         key="select_b_filtrado_tab"
     )
+
+    # 6) Al pulsar \"Buscar\" => filtrar en TODAS las hojas
     if st.button("Buscar en Base Historial", key="buscar_filtrado"):
         index_sel = [display_label(t) for t in op_list].index(seleccion)
-        ref_sel, nom_sel, hoja_sel_b = op_list[index_sel]
+        ref_sel, nom_sel = op_list[index_sel]
+
+        # Filtrar por la ref
         df_filtrado = df_b_combined[
             (df_b_combined["Ref. Fisher"].astype(str).str.strip() == ref_sel)
         ].copy()
+
+        # Filtrar sólo si \"Caducidad\" no es nulo (opcional)
         if "Caducidad" in df_filtrado.columns:
             df_filtrado = df_filtrado.dropna(subset=["Caducidad"])
+
         if df_filtrado.empty:
             st.warning("No se encontraron reactivos (en B) con esos parámetros.")
         else:
+            # Ordenar por Caducidad
             if "Caducidad" in df_filtrado.columns:
                 df_filtrado.sort_values(by="Caducidad", inplace=True, ignore_index=True)
+
+            # Ejemplo de mensaje especial para A27754
             if ref_sel == "A27754":
                 st.info("Nota: Esta referencia se comparte entre OCA y FOCUS.")
+
             st.dataframe(df_filtrado)
+
+            # 7) Opción para descargar
             excel_filtro = generar_excel_en_memoria(df_filtrado, "Filtro_B")
             st.download_button(
                 label="Descargar resultados filtrados en Excel",
@@ -797,6 +828,7 @@ with tabs[1]:
                 file_name="Filtro_B.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
+
 
 with tabs[2]:
     st.write("### Informar Reactivo Agotado")
