@@ -620,6 +620,20 @@ with colD:
     st.write("")
     if st.button("Refrescar Página"):
         st.rerun()
+    # ---------------------------
+# AÑADIMOS AQUÍ UN CAMPO PARA "Comentario"
+# ---------------------------
+# 1) Obtenemos el comentario actual (si la columna "Comentario" ya existe).
+comentario_actual = ""
+if "Comentario" in df_main.columns:
+    comentario_actual = str(df_main.at[row_index, "Comentario"])
+
+# 2) Creamos el text_area (o text_input) donde el usuario escribe/edita el comentario.
+comentario_nuevo = st.text_area(
+    label="Comentario (opcional)",
+    value=comentario_actual,
+    key="comentario_input_key"
+)
 
 fped_new = None
 if fped_date is not None:
@@ -700,6 +714,9 @@ if st.button("Guardar Cambios en Hoja Stock"):
         df_main.at[row_index,"Fecha Llegada"] = flleg_new
     if "Sitio almacenaje" in df_main.columns:
         df_main.at[row_index,"Sitio almacenaje"] = sitio_new
+    if "Comentario" not in df_main.columns:
+        df_main["Comentario"] = ""
+    df_main.at[row_index,"Comentario"] = comentario_nuevo
 
     if pd.notna(fped_new) and group_order_selected:
         for label in group_order_selected:
@@ -714,13 +731,13 @@ if st.button("Guardar Cambios en Hoja Stock"):
     new_file = crear_nueva_version_filename()
     with pd.ExcelWriter(new_file, engine="openpyxl") as writer:
         for sht, df_sht in st.session_state["data_dict"].items():
-            ocultar=["ColorGroup","EsTitulo","GroupCount","MultiSort","NotTitulo","GroupID"]
+            ocultar=["ColorGroup","EsTitulo","GroupCount","MultiSort","NotTitulo","GroupID","Alarma"]
             tmp = df_sht.drop(columns=ocultar, errors="ignore")
             tmp.to_excel(writer, sheet_name=sht, index=False)
 
     with pd.ExcelWriter(STOCK_FILE, engine="openpyxl") as writer:
         for sht, df_sht in st.session_state["data_dict"].items():
-            ocultar=["ColorGroup","EsTitulo","GroupCount","MultiSort","NotTitulo","GroupID"]
+            ocultar=["ColorGroup","EsTitulo","GroupCount","MultiSort","NotTitulo","GroupID","Alarma"]
             tmp = df_sht.drop(columns=ocultar, errors="ignore")
             tmp.to_excel(writer, sheet_name=sht, index=False)
 
@@ -740,6 +757,7 @@ if st.button("Guardar Cambios en Hoja Stock"):
         "Sitio almacenaje": df_main.at[row_index,"Sitio almacenaje"],
         "Uds.": df_main.at[row_index,"Uds."] if "Uds." in df_main.columns else 0,
         "Stock": df_main.at[row_index,"Stock"] if "Stock" in df_main.columns else 0,
+        "Comentario": df_main.at[row_index,"Comentario"] if "Comentario" in df_main.columns else "",
         "Fecha Registro B": datetime.datetime.now()
     }
     df_b_sh = pd.concat([df_b_sh, pd.DataFrame([nueva_fila])], ignore_index=True)
