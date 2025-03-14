@@ -436,6 +436,8 @@ with st.sidebar.expander("🔎 Ver / Gestionar versiones Historial (B)", expande
 
 
 
+st.sidebar.markdown("### Información")
+st.sidebar.write("Recuerde que en la barra lateral puede gestionar las versiones. Despliegue para consultarlo.")
 
 
 # -------------------------------------------------------------------------
