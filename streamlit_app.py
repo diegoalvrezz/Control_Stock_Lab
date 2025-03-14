@@ -13,6 +13,23 @@ import time
 st.set_page_config(page_title="Control de Stock con Lotes", layout="centered")
 st.title("🔬 Control Stock Lab. Patología Molécular")
 
+def calc_alarma(row):
+    """
+    Devuelve un string con un ícono de alerta:
+    - '🔴' si el Stock es 0 y no hay Fecha Pedida.
+    - '🟨' si el Stock es 0 y sí hay Fecha Pedida.
+    - '' (vacío) si no hay que alertar.
+    """
+    stock_val = row.get("Stock", 0)
+    fecha_pedida = row.get("Fecha Pedida", None)
+
+    if stock_val == 0 and pd.isna(fecha_pedida):
+        return "🔴"
+    elif stock_val == 0 and not pd.isna(fecha_pedida):
+        return "🟨"
+    return ""
+
+
 # ---------------------------
 # Autenticación (estructura actualizada)
 # ---------------------------
