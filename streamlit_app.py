@@ -13,7 +13,7 @@ import pytz
 
 
 st.set_page_config(page_title="Control de Stock con Lotes", layout="centered")
-st.title("Ari guapa")
+st.title("🔬 Control Stock Lab. Patología Molécular")
 
 # ---------------------------
 # Autenticación (estructura actualizada)
