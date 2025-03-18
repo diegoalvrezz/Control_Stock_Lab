@@ -921,9 +921,22 @@ with tabs[2]:
     if "Nombre producto" not in df_a.columns:
         st.error("No existe columna 'Nombre producto' en esta hoja A.")
         st.stop()
-    nombres_unicos = sorted(df_a["Nombre producto"].dropna().unique())
-    nombre_sel = st.selectbox("Nombre producto en A:", nombres_unicos, key="agotado_nombre")
-    df_cand = df_a[df_a["Nombre producto"]==nombre_sel]
+    # Generar lista con "Nombre producto (Ref. Fisher)"
+    df_a["nombre_ref"] = df_a["Nombre producto"].astype(str) + " (" + df_a["Ref. Fisher"].astype(str) + ")"
+    nombre_ref_unicos = sorted(df_a["nombre_ref"].dropna().unique())
+
+    # Seleccionar producto con Ref. Fisher visible
+    nombre_ref_sel = st.selectbox("Nombre producto en A (Ref. Fisher):", nombre_ref_unicos, key="agotado_nombre")
+
+    # Separar nuevamente nombre y referencia
+    nombre_sel = nombre_ref_sel.rsplit(" (", 1)[0].strip()
+    ref_sel = nombre_ref_sel.rsplit(" (", 1)[1].replace(")", "").strip()
+
+    df_cand = df_a[
+        (df_a["Nombre producto"] == nombre_sel) &
+        (df_a["Ref. Fisher"] == ref_sel)
+    ]
+
     if df_cand.empty:
         st.warning("No se encontró ese nombre en esta hoja A.")
     else:
