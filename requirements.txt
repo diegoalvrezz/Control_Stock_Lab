@@ -3,3 +3,4 @@ streamlit-authenticator
 pandas
 numpy
 openpyxl
+glob
