@@ -318,9 +318,16 @@ with st.sidebar.expander("🗃️ Gestor avanzado versiones B (Histórico)", exp
     # Subir manualmente una versión descargada B
     st.write("**Subir manualmente versión descargada B:**")
 
+    # Asegurar que el estado del archivo subido B está definido
+if 'uploaded_file_b' not in st.session_state:
+    st.session_state['uploaded_file_b'] = None
+
+    st.write("**Subir manualmente versión descargada B:**")
     archivo_subido_b = st.file_uploader("Subir archivo Excel B (.xlsx)", type=["xlsx"], key="uploader_b")
 
-    if archivo_subido_b:
+    if archivo_subido_b and archivo_subido_b.name != st.session_state['uploaded_file_b']:
+        st.session_state['uploaded_file_b'] = archivo_subido_b.name  # Guarda el nombre del archivo subido
+
         # Asegurar que ruta_actual_b siempre tenga un valor definido
         if subcarpetas_b:
             ruta_actual_b = os.path.join(VERSIONS_DIR_B, mes_elegido_b)
@@ -338,6 +345,7 @@ with st.sidebar.expander("🗃️ Gestor avanzado versiones B (Histórico)", exp
 
         time.sleep(1.5)
         st.rerun()
+
 
 
 
