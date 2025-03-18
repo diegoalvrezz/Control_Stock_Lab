@@ -190,35 +190,35 @@ with st.sidebar.expander("📂 Gestor avanzado de versiones", expanded=False):
     # Subir manualmente una versión descargada
     st.write("**Subir manualmente una versión descargada:**")
     # Subida robusta con control de estado
-if 'uploaded_file_name' not in st.session_state:
-    st.session_state['uploaded_file_name'] = None
+    if 'uploaded_file_name' not in st.session_state:
+        st.session_state['uploaded_file_name'] = None
 
-archivo_subido = st.file_uploader("Subir archivo Excel (.xlsx)", type=["xlsx"])
+    archivo_subido = st.file_uploader("Subir archivo Excel (.xlsx)", type=["xlsx"])
 
-if archivo_subido and archivo_subido.name != st.session_state['uploaded_file_name']:
-    st.session_state['uploaded_file_name'] = archivo_subido.name  # Guarda el nombre del archivo subido
+    if archivo_subido and archivo_subido.name != st.session_state['uploaded_file_name']:
+        st.session_state['uploaded_file_name'] = archivo_subido.name  # Guarda el nombre del archivo subido
 
-    # Definir claramente ruta_actual para evitar errores
-    if subcarpetas:
-        ruta_actual = os.path.join(VERSIONS_DIR, mes_elegido)
-    else:
-        ruta_actual = obtener_subcarpeta_versiones()
+        # Definir claramente ruta_actual para evitar errores
+        if subcarpetas:
+            ruta_actual = os.path.join(VERSIONS_DIR, mes_elegido)
+        else:
+            ruta_actual = obtener_subcarpeta_versiones()
 
-    nombre_archivo_subido = f"Subido_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.xlsx"
-    ruta_guardado = os.path.join(ruta_actual, nombre_archivo_subido)
+        nombre_archivo_subido = f"Subido_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.xlsx"
+        ruta_guardado = os.path.join(ruta_actual, nombre_archivo_subido)
 
-    with open(ruta_guardado, "wb") as out_file:
-        shutil.copyfileobj(archivo_subido, out_file)
+        with open(ruta_guardado, "wb") as out_file:
+            shutil.copyfileobj(archivo_subido, out_file)
 
-    # Actualizar sesión inmediatamente con control de errores
-    try:
-        data_subida = pd.read_excel(ruta_guardado, sheet_name=None, engine="openpyxl")
-        st.session_state["data_dict"] = data_subida
-        st.success(f"Archivo '{nombre_archivo_subido}' subido correctamente y cargado en memoria.")
-        time.sleep(1)
-        st.rerun()
-    except Exception as e:
-        st.error(f"Archivo subido pero ocurrió un error al cargar los datos: {e}")
+        # Actualizar sesión inmediatamente con control de errores
+        try:
+            data_subida = pd.read_excel(ruta_guardado, sheet_name=None, engine="openpyxl")
+            st.session_state["data_dict"] = data_subida
+            st.success(f"Archivo '{nombre_archivo_subido}' subido correctamente y cargado en memoria.")
+            time.sleep(1)
+            st.rerun()
+        except Exception as e:
+            st.error(f"Archivo subido pero ocurrió un error al cargar los datos: {e}")
 
 
 
