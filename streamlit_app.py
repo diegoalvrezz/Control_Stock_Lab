@@ -87,7 +87,15 @@ def crear_nueva_version_filename():
 
 # Explorador visual y subida manual en sidebar
 with st.sidebar.expander("📂 Gestor avanzado de versiones", expanded=False):
-    ruta_actual = obtener_subcarpeta_versiones()
+        # Lista todas las subcarpetas (cada subcarpeta es un mes)
+    subcarpetas = sorted([d for d in os.listdir(VERSIONS_DIR) if os.path.isdir(os.path.join(VERSIONS_DIR, d))], reverse=True)
+
+    # Selector para elegir la subcarpeta (mes)
+    mes_elegido = st.selectbox("📅 Selecciona el mes para explorar versiones:", subcarpetas)
+
+    # Ruta completa a la subcarpeta elegida
+    ruta_actual = os.path.join(VERSIONS_DIR, mes_elegido)
+
     
     # Explorar versiones guardadas
     st.write(f"**Versiones guardadas en {ruta_actual}:**")
