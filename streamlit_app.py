@@ -613,13 +613,15 @@ if flleg_date is not None:
     dt_lleg = datetime.datetime.combine(flleg_date, flleg_time)
     flleg_new = pd.to_datetime(dt_lleg)
 st.write("#### Lugar de Almacenaje")
-opciones_sitio = ["Congelador 1","Congelador 2","Frigorífico","Tª Ambiente"]
+opciones_sitio = ["No especificado","Congelador 1","Congelador 2","Frigorífico","Tª Ambiente"]
 sitio_p = sitio_almacenaje_actual.split(" - ")[0] if " - " in sitio_almacenaje_actual else sitio_almacenaje_actual
 if sitio_p not in opciones_sitio:
     sitio_p = opciones_sitio[0]
 sel_top = st.selectbox("Almacén Principal", opciones_sitio, index=opciones_sitio.index(sitio_p))
 subopc=""
-if sel_top=="Congelador 1":
+if sel_top == "No especificado":
+    subopc = "No especificado"
+elif sel_top=="Congelador 1":
     cajs=[f"Cajón {i}" for i in range(1,9)]
     subopc= st.selectbox("Cajón (1 Arriba,8 Abajo)", cajs)
 elif sel_top=="Congelador 2":
