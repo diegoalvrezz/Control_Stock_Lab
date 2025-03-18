@@ -171,10 +171,7 @@ def load_data_a():
         st.error(f"Error al cargar Stock_Original: {e}")
         return {}
 
-def crear_nueva_version_filename():
-    zona_local = pytz.timezone('Europe/Madrid')  # ajusta a tu zona
-    fh = datetime.datetime.now(zona_local).strftime("%Y-%m-%d_%H-%M-%S")
-    return os.path.join(VERSIONS_DIR, f"Stock_{fh}.xlsx")
+
 
 
 # -------------------------------------------------------------------------
@@ -200,10 +197,21 @@ def init_original_b():
             shutil.copy(STOCK_FILE_B, ORIGINAL_FILE_B)
 
 init_original_b()
+def obtener_subcarpeta_versiones_b():
+    zona_local = pytz.timezone('Europe/Madrid')
+    ahora = datetime.datetime.now(zona_local)
+    nombre_subcarpeta_b = ahora.strftime("%Y_%m_%B")  # Ej: 2025_03_Marzo
+    ruta_subcarpeta_b = os.path.join(VERSIONS_DIR_B, nombre_subcarpeta_b)
+    os.makedirs(ruta_subcarpeta_b, exist_ok=True)
+    return ruta_subcarpeta_b
+
 
 def crear_nueva_version_filename_b():
-    fh = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    return os.path.join(VERSIONS_DIR_B, f"StockB_{fh}.xlsx")
+    ruta_subcarpeta_b = obtener_subcarpeta_versiones_b()
+    zona_local = pytz.timezone('Europe/Madrid')
+    fh = datetime.datetime.now(zona_local).strftime("%Y-%m-%d_%H-%M-%S")
+    return os.path.join(ruta_subcarpeta_b, f"StockB_{fh}.xlsx")
+
 
 # -------------------------------------------------------------------------
 # FUNCIONES COMUNES
