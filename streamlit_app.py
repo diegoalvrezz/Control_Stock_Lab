@@ -87,59 +87,66 @@ def crear_nueva_version_filename():
 
 # Explorador visual y subida manual en sidebar
 with st.sidebar.expander("📂 Gestor avanzado de versiones", expanded=False):
-        # Lista todas las subcarpetas (cada subcarpeta es un mes)
-    subcarpetas = sorted([d for d in os.listdir(VERSIONS_DIR) if os.path.isdir(os.path.join(VERSIONS_DIR, d))], reverse=True)
+    # Lista todas las subcarpetas (cada subcarpeta es un mes)
+    subcarpetas = sorted(
+        [d for d in os.listdir(VERSIONS_DIR) if os.path.isdir(os.path.join(VERSIONS_DIR, d))],
+        reverse=True
+    )
 
-    # Selector para elegir la subcarpeta (mes)
-    mes_elegido = st.selectbox("📅 Selecciona el mes para explorar versiones:", subcarpetas)
+    if subcarpetas:  # Comprueba si la lista tiene elementos
+        # Selector para elegir la subcarpeta (mes)
+        mes_elegido = st.selectbox("📅 Selecciona el mes para explorar versiones:", subcarpetas)
 
-    # Ruta completa a la subcarpeta elegida
-    ruta_actual = os.path.join(VERSIONS_DIR, mes_elegido)
+        # Ruta completa a la subcarpeta elegida
+        ruta_actual = os.path.join(VERSIONS_DIR, mes_elegido)
 
-    
-    # Explorar versiones guardadas
-    st.write(f"**Versiones guardadas en {ruta_actual}:**")
-    archivos_versiones = sorted(os.listdir(ruta_actual), reverse=True)
+        # Explorar versiones guardadas
+        st.write(f"**Versiones guardadas en {ruta_actual}:**")
+        archivos_versiones = sorted(os.listdir(ruta_actual), reverse=True)
 
-    if archivos_versiones:
-        versiones_df = pd.DataFrame({
-            "Archivo": archivos_versiones,
-            "Fecha creación": [datetime.datetime.fromtimestamp(
-                os.path.getctime(os.path.join(ruta_actual, f))
-            ).strftime('%d/%m/%Y %H:%M:%S') for f in archivos_versiones]
-        })
+        if archivos_versiones:
+            versiones_df = pd.DataFrame({
+                "Archivo": archivos_versiones,
+                "Fecha creación": [datetime.datetime.fromtimestamp(
+                    os.path.getctime(os.path.join(ruta_actual, f))
+                ).strftime('%d/%m/%Y %H:%M:%S') for f in archivos_versiones]
+            })
 
-        st.dataframe(versiones_df)
+            st.dataframe(versiones_df)
 
-        version_gestion = st.selectbox("Seleccione versión para gestionar:", archivos_versiones)
-        ruta_version = os.path.join(ruta_actual, version_gestion)
+            version_gestion = st.selectbox("Seleccione versión para gestionar:", archivos_versiones)
+            ruta_version = os.path.join(ruta_actual, version_gestion)
 
-        col_down, col_del = st.columns(2)
+            col_down, col_del = st.columns(2)
 
-        with col_down:
-            with open(ruta_version, "rb") as version_file:
-                st.download_button(
-                    "Descargar versión",
-                    data=version_file,
-                    file_name=version_gestion,
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
+            with col_down:
+                with open(ruta_version, "rb") as version_file:
+                    st.download_button(
+                        "Descargar versión",
+                        data=version_file,
+                        file_name=version_gestion,
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
 
-        with col_del:
-            confirm_eliminar = st.text_input("Escribe ELIMINAR para borrar", key="confirm_del_avanzado")
-            if st.button("Eliminar versión seleccionada"):
-                if confirm_eliminar == "ELIMINAR":
-                    os.remove(ruta_version)
-                    st.success("Versión eliminada correctamente.")
-                    time.sleep(1.5)
-                    st.rerun()
-                else:
-                    st.error("Debes escribir ELIMINAR para confirmar.")
-    else:
-        st.info("No hay versiones guardadas este mes.")
+            with col_del:
+                confirm_eliminar = st.text_input("Escribe ELIMINAR para borrar", key="confirm_del_avanzado")
+                if st.button("Eliminar versión seleccionada"):
+                    if confirm_eliminar == "ELIMINAR":
+                        os.remove(ruta_version)
+                        st.success("Versión eliminada correctamente.")
+                        time.sleep(1.5)
+                        st.rerun()
+                    else:
+                        st.error("Debes escribir ELIMINAR para confirmar.")
+        else:
+            st.info("No hay versiones guardadas en esta subcarpeta.")
+
+    else:  # Mensaje cuando no existen subcarpetas
+        st.info("Actualmente no existen subcarpetas de versiones en el directorio.")
 
     st.divider()
-        # Eliminar todas las versiones excepto la original
+
+    # Eliminar todas las versiones excepto la original
     st.write("⚠️ **Eliminar TODAS las versiones excepto la original:**")
     confirm_all_del = st.text_input("Escribe ELIMINAR TODO para confirmar", key="confirm_all_del_a")
 
@@ -148,7 +155,6 @@ with st.sidebar.expander("📂 Gestor avanzado de versiones", expanded=False):
             for subdir, dirs, files in os.walk(VERSIONS_DIR):
                 for file in files:
                     ruta_archivo = os.path.join(subdir, file)
-                    # Asegurarse de NO eliminar la versión original
                     if file != "Stock_Original.xlsx":
                         os.remove(ruta_archivo)
             st.success("Todas las versiones eliminadas correctamente excepto la original.")
@@ -163,7 +169,7 @@ with st.sidebar.expander("📂 Gestor avanzado de versiones", expanded=False):
 
     if archivo_subido:
         nombre_archivo_subido = f"Subido_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.xlsx"
-        ruta_guardado = os.path.join(ruta_actual, nombre_archivo_subido)
+        ruta_guardado = os.path.join(obtener_subcarpeta_versiones(), nombre_archivo_subido)
 
         with open(ruta_guardado, "wb") as out_file:
             shutil.copyfileobj(archivo_subido, out_file)
@@ -171,6 +177,7 @@ with st.sidebar.expander("📂 Gestor avanzado de versiones", expanded=False):
         st.success(f"Archivo '{nombre_archivo_subido}' subido correctamente.")
         time.sleep(1.5)
         st.rerun()
+
 
 VERSIONS_DIR_B = "versions_b"
 
