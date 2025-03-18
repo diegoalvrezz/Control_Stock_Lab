@@ -64,8 +64,6 @@ if st.button("Cerrar sesión"):
 STOCK_FILE = "Stock_Original.xlsx"
 VERSIONS_DIR = "versions"
 ORIGINAL_FILE = os.path.join(VERSIONS_DIR, "Stock_Original.xlsx")
-import glob
-
 def obtener_ultima_version():
     archivos = glob.glob(f"{VERSIONS_DIR}/**/*.xlsx", recursive=True)
     archivos = [f for f in archivos if "Stock_Original.xlsx" not in f]
@@ -77,7 +75,13 @@ def obtener_ultima_version():
 
 # Cargar automáticamente última versión guardada al inicio
 archivo_a_cargar = obtener_ultima_version()
-st.session_state["data_dict"] = pd.read_excel(archivo_a_cargar, sheet_name=None, engine="openpyxl")
+
+# Ahora cargamos los datos en session_state con manejo de errores
+try:
+    st.session_state["data_dict"] = pd.read_excel(archivo_a_cargar, sheet_name=None, engine="openpyxl")
+except Exception as e:
+    st.error(f"Error al cargar el archivo inicial ({archivo_a_cargar}): {e}")
+    st.session_state["data_dict"] = {}
 
 
 os.makedirs(VERSIONS_DIR, exist_ok=True)
