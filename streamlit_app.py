@@ -222,6 +222,16 @@ with st.sidebar.expander("📂 Gestor avanzado de versiones", expanded=False):
 
 
 
+def obtener_subcarpeta_versiones_b():
+    """
+    Crea y obtiene la subcarpeta correspondiente al mes y año actual en versions_b.
+    """
+    zona_local = pytz.timezone('Europe/Madrid')
+    ahora = datetime.datetime.now(zona_local)
+    nombre_subcarpeta_b = ahora.strftime("%Y_%m_%B")  # Ejemplo: "2025_03_Marzo"
+    ruta_subcarpeta_b = os.path.join(VERSIONS_DIR_B, nombre_subcarpeta_b)
+    os.makedirs(ruta_subcarpeta_b, exist_ok=True)  # Crea la carpeta si no existe
+    return ruta_subcarpeta_b
 
 
 
@@ -307,18 +317,29 @@ with st.sidebar.expander("🗃️ Gestor avanzado versiones B (Histórico)", exp
 
     # Subir manualmente una versión descargada B
     st.write("**Subir manualmente versión descargada B:**")
+
     archivo_subido_b = st.file_uploader("Subir archivo Excel B (.xlsx)", type=["xlsx"], key="uploader_b")
 
     if archivo_subido_b:
+        # Asegurar que ruta_actual_b siempre tenga un valor definido
+        if subcarpetas_b:
+            ruta_actual_b = os.path.join(VERSIONS_DIR_B, mes_elegido_b)
+        else:
+            ruta_actual_b = obtener_subcarpeta_versiones_b()  # Si no hay subcarpetas, crea una nueva automáticamente
+
         nombre_archivo_subido_b = f"SubidoB_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.xlsx"
         ruta_guardado_b = os.path.join(ruta_actual_b, nombre_archivo_subido_b)
 
         with open(ruta_guardado_b, "wb") as out_file_b:
             shutil.copyfileobj(archivo_subido_b, out_file_b)
 
+        # Confirmación de subida correcta
         st.success(f"Archivo B '{nombre_archivo_subido_b}' subido correctamente.")
+
         time.sleep(1.5)
         st.rerun()
+
+
 
 
 
