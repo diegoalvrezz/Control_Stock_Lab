@@ -192,13 +192,19 @@ with st.sidebar.expander("📂 Gestor avanzado de versiones", expanded=False):
     archivo_subido = st.file_uploader("Subir archivo Excel (.xlsx)", type=["xlsx"])
 
     if archivo_subido:
+        # Comprobar que exista una ruta_actual definida, o crearla por defecto
+        if subcarpetas:
+            ruta_actual = os.path.join(VERSIONS_DIR, mes_elegido)
+        else:
+            ruta_actual = obtener_subcarpeta_versiones()
+
         nombre_archivo_subido = f"Subido_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.xlsx"
         ruta_guardado = os.path.join(ruta_actual, nombre_archivo_subido)
 
         with open(ruta_guardado, "wb") as out_file:
             shutil.copyfileobj(archivo_subido, out_file)
 
-        # Actualizar inmediatamente la sesión con un control robusto
+        # Actualizar inmediatamente la sesión con control de errores
         try:
             data_subida = pd.read_excel(ruta_guardado, sheet_name=None, engine="openpyxl")
             st.session_state["data_dict"] = data_subida
