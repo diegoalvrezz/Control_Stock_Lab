@@ -155,6 +155,7 @@ with st.sidebar.expander("📂 Gestor avanzado de versiones", expanded=False):
         time.sleep(1.5)
         st.rerun()
 
+VERSIONS_DIR_B = "versions_b"
 
 # Explorador visual y subida manual para versiones B
 with st.sidebar.expander("🗃️ Gestor avanzado versiones B (Histórico)", expanded=False):
