@@ -319,9 +319,6 @@ with st.sidebar.expander("🗃️ Gestor avanzado versiones B (Histórico)", exp
     # Subir manualmente una versión descargada B
     st.write("**Subir manualmente una versión descargada B:**")
 
-    if 'uploaded_file_b' not in st.session_state:
-        st.session_state['uploaded_file_b'] = None
-
     archivo_subido_b = st.file_uploader("Selecciona archivo B (.xlsx)", type=["xlsx"], key="uploader_b")
 
     if archivo_subido_b:
