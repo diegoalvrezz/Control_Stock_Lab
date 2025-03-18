@@ -187,7 +187,7 @@ with st.sidebar.expander("📂 Gestor avanzado de versiones", expanded=False):
         else:
             st.error("Debes escribir 'ELIMINAR TODO' para confirmar.")
 
-    # Subir manualmente una versión descargada
+    # Subir manualmente una versión descargada con depuración
     st.write("**Subir manualmente una versión descargada:**")
 
     if 'uploaded_file_name' not in st.session_state:
@@ -195,39 +195,57 @@ with st.sidebar.expander("📂 Gestor avanzado de versiones", expanded=False):
 
     archivo_subido = st.file_uploader("Subir archivo Excel (.xlsx)", type=["xlsx"])
 
-    if archivo_subido and archivo_subido.name != st.session_state['uploaded_file_name']:
-        st.session_state['uploaded_file_name'] = archivo_subido.name  # Evita que se procese varias veces
+    # 1️⃣ Verificar si el archivo fue detectado
+    if archivo_subido:
+        st.write(f"📂 Archivo detectado: {archivo_subido.name}")
+    else:
+        st.warning("⚠ No se ha seleccionado ningún archivo.")
+        st.stop()  # Detener ejecución si no hay archivo
 
-        # Definir ruta destino
-        if subcarpetas:
-            ruta_actual = os.path.join(VERSIONS_DIR, mes_elegido)
-        else:
-            ruta_actual = obtener_subcarpeta_versiones()
+    # 2️⃣ Verificar si es un archivo nuevo
+    if archivo_subido.name == st.session_state['uploaded_file_name']:
+        st.warning("⚠ Este archivo ya ha sido cargado previamente.")
+        st.stop()
 
-        nombre_archivo_subido = f"Subido_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.xlsx"
-        ruta_guardado = os.path.join(ruta_actual, nombre_archivo_subido)
+    # 3️⃣ Guardamos el nombre para evitar múltiples procesamientos
+    st.session_state['uploaded_file_name'] = archivo_subido.name  
 
-        # Guardar el archivo subido
+    # 4️⃣ Definir ruta destino para guardar el archivo
+    if subcarpetas:
+        ruta_actual = os.path.join(VERSIONS_DIR, mes_elegido)
+    else:
+        ruta_actual = obtener_subcarpeta_versiones()
+
+    nombre_archivo_subido = f"Subido_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.xlsx"
+    ruta_guardado = os.path.join(ruta_actual, nombre_archivo_subido)
+
+    # 5️⃣ Guardar el archivo en la carpeta de versiones A
+    try:
         with open(ruta_guardado, "wb") as out_file:
             shutil.copyfileobj(archivo_subido, out_file)
+        st.success(f"✅ Archivo guardado correctamente en: {ruta_guardado}")
+    except Exception as e:
+        st.error(f"❌ Error al guardar el archivo: {e}")
+        st.stop()
 
-        # Intentar cargar el archivo en la base de datos
-        try:
-            data_subida = pd.read_excel(ruta_guardado, sheet_name=None, engine="openpyxl")
-            st.session_state["data_dict"] = data_subida  # ACTUALIZAR LA BASE DE DATOS
-            st.success(f"Archivo '{nombre_archivo_subido}' subido y cargado en la base de datos correctamente.")
+    # 6️⃣ Intentar cargar el archivo en la base de datos A
+    try:
+        data_subida = pd.read_excel(ruta_guardado, sheet_name=None, engine="openpyxl")
+        st.session_state["data_dict"] = data_subida  # ACTUALIZAR LA BASE DE DATOS A
+        st.success(f"✅ Archivo '{nombre_archivo_subido}' importado correctamente y reflejado en la base de datos.")
 
-            # Guardar la versión importada como la nueva base de datos principal
-            with pd.ExcelWriter(STOCK_FILE, engine="openpyxl") as writer:
-                for sheet_name, df_sheet in data_subida.items():
-                    df_sheet.to_excel(writer, sheet_name=sheet_name, index=False)
+        # Guardar la versión importada como la nueva base de datos principal
+        with pd.ExcelWriter(STOCK_FILE, engine="openpyxl") as writer:
+            for sheet_name, df_sheet in data_subida.items():
+                df_sheet.to_excel(writer, sheet_name=sheet_name, index=False)
 
-            st.success("Base de datos actualizada con éxito.")
-            time.sleep(1)
-            st.rerun()
-            
-        except Exception as e:
-            st.error(f"El archivo se subió pero hubo un error al procesarlo: {e}")
+        st.success("✅ Base de datos A actualizada con éxito.")
+        time.sleep(1)
+        st.rerun()
+
+    except Exception as e:
+        st.error(f"❌ El archivo se subió pero hubo un error al procesarlo: {e}")
+
 
 
 
