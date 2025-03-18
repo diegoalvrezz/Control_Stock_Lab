@@ -64,6 +64,9 @@ if st.button("Cerrar sesión"):
 STOCK_FILE = "Stock_Original.xlsx"
 VERSIONS_DIR = "versions"
 ORIGINAL_FILE = os.path.join(VERSIONS_DIR, "Stock_Original.xlsx")
+
+import glob 
+
 def obtener_ultima_version():
     archivos = glob.glob(f"{VERSIONS_DIR}/**/*.xlsx", recursive=True)
     archivos = [f for f in archivos if "Stock_Original.xlsx" not in f]
