@@ -171,14 +171,22 @@ with st.sidebar.expander("📂 Gestor avanzado de versiones", expanded=False):
 
     if archivo_subido:
         nombre_archivo_subido = f"Subido_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.xlsx"
-        ruta_guardado = os.path.join(obtener_subcarpeta_versiones(), nombre_archivo_subido)
+        ruta_guardado = os.path.join(ruta_actual, nombre_archivo_subido)
 
         with open(ruta_guardado, "wb") as out_file:
             shutil.copyfileobj(archivo_subido, out_file)
 
-        st.success(f"Archivo '{nombre_archivo_subido}' subido correctamente.")
+        # Actualizar inmediatamente la información de sesión con este nuevo archivo subido
+        try:
+            data_subida = pd.read_excel(ruta_guardado, sheet_name=None, engine="openpyxl")
+            st.session_state["data_dict"] = data_subida
+            st.success(f"Archivo '{nombre_archivo_subido}' subido correctamente y datos cargados.")
+        except Exception as e:
+            st.error(f"Archivo subido pero ocurrió un error al cargar los datos: {e}")
+
         time.sleep(1.5)
         st.rerun()
+
 
 
 VERSIONS_DIR_B = "versions_b"
