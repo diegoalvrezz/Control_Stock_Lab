@@ -66,6 +66,8 @@ VERSIONS_DIR = "versions"
 ORIGINAL_FILE = os.path.join(VERSIONS_DIR, "Stock_Original.xlsx")
 
 os.makedirs(VERSIONS_DIR, exist_ok=True)
+VERSIONS_DIR_B = "versions_b"
+os.makedirs(VERSIONS_DIR_B, exist_ok=True)
 
 import calendar
 
