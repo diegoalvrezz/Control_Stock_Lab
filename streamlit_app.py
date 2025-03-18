@@ -191,16 +191,16 @@ with st.sidebar.expander("📂 Gestor avanzado de versiones", expanded=False):
         with open(ruta_guardado, "wb") as out_file:
             shutil.copyfileobj(archivo_subido, out_file)
 
-        # Actualizar inmediatamente la información de sesión con este nuevo archivo subido
+        # Actualizar inmediatamente la sesión con un control robusto
         try:
             data_subida = pd.read_excel(ruta_guardado, sheet_name=None, engine="openpyxl")
             st.session_state["data_dict"] = data_subida
-            st.success(f"Archivo '{nombre_archivo_subido}' subido correctamente y datos cargados.")
+            st.success(f"Archivo '{nombre_archivo_subido}' subido correctamente y cargado en memoria.")
+            time.sleep(1)
+            st.rerun()
         except Exception as e:
             st.error(f"Archivo subido pero ocurrió un error al cargar los datos: {e}")
 
-        time.sleep(1.5)
-        st.rerun()
 
 
 
