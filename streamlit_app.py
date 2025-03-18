@@ -188,7 +188,7 @@ with st.sidebar.expander("📂 Gestor avanzado de versiones", expanded=False):
             st.error("Debes escribir 'ELIMINAR TODO' para confirmar.")
 
     # 📂 Subir manualmente una versión descargada A (Stock)
-    st.sidebar.subheader("📤 Importar nueva versión de Stock (A)")
+
     archivo_subido = st.file_uploader("Selecciona archivo A (.xlsx)", type=["xlsx"], key="uploader_a")
 
     if archivo_subido:
@@ -322,41 +322,36 @@ with st.sidebar.expander("🗃️ Gestor avanzado versiones B (Histórico)", exp
     if 'uploaded_file_b' not in st.session_state:
         st.session_state['uploaded_file_b'] = None
 
-    archivo_subido_b = st.file_uploader("Subir archivo Excel B (.xlsx)", type=["xlsx"], key="uploader_b")
+    archivo_subido_b = st.file_uploader("Selecciona archivo B (.xlsx)", type=["xlsx"], key="uploader_b")
 
-    if archivo_subido_b and archivo_subido_b.name != st.session_state['uploaded_file_b']:
-        st.session_state['uploaded_file_b'] = archivo_subido_b.name  # Evita que se procese varias veces
+    if archivo_subido_b:
+        if 'uploaded_file_name_b' not in st.session_state or archivo_subido_b.name != st.session_state['uploaded_file_name_b']:
+            st.session_state['uploaded_file_name_b'] = archivo_subido_b.name  # Guarda el nombre para evitar bucles
 
-        # Asegurar que `ruta_actual_b` siempre tenga un valor definido
-        if subcarpetas_b:
-            ruta_actual_b = os.path.join(VERSIONS_DIR_B, mes_elegido_b)
-        else:
-            ruta_actual_b = obtener_subcarpeta_versiones_b()  # Si no hay subcarpetas, crea una nueva automáticamente
+            ruta_actual_b = obtener_subcarpeta_versiones_b()
+            nombre_archivo_subido_b = f"SubidoB_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.xlsx"
+            ruta_guardado_b = os.path.join(ruta_actual_b, nombre_archivo_subido_b)
 
-        nombre_archivo_subido_b = f"SubidoB_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.xlsx"
-        ruta_guardado_b = os.path.join(ruta_actual_b, nombre_archivo_subido_b)
+            # Guardar el archivo
+            with open(ruta_guardado_b, "wb") as out_file_b:
+                shutil.copyfileobj(archivo_subido_b, out_file_b)
 
-        # Guardar el archivo subido en la carpeta de versiones B
-        with open(ruta_guardado_b, "wb") as out_file_b:
-            shutil.copyfileobj(archivo_subido_b, out_file_b)
+            try:
+                # Cargar en la base de datos B
+                data_subida_b = pd.read_excel(ruta_guardado_b, sheet_name=None, engine="openpyxl")
+                st.session_state["data_dict_b"] = data_subida_b
 
-        # Intentar cargar el archivo en la base de datos B
-        try:
-            data_subida_b = pd.read_excel(ruta_guardado_b, sheet_name=None, engine="openpyxl")
-            st.session_state["data_dict_b"] = data_subida_b  # ACTUALIZAR LA BASE DE DATOS B
-            st.success(f"Archivo B '{nombre_archivo_subido_b}' subido y cargado en la base de datos B correctamente.")
+                # Guardar como archivo principal B
+                with pd.ExcelWriter(STOCK_FILE_B, engine="openpyxl") as writer_b:
+                    for sheet_name_b, df_sheet_b in data_subida_b.items():
+                        df_sheet_b.to_excel(writer_b, sheet_name=sheet_name_b, index=False)
 
-            # Guardar la versión importada como la nueva base de datos B principal
-            with pd.ExcelWriter(STOCK_FILE_B, engine="openpyxl") as writer_b:
-                for sheet_name_b, df_sheet_b in data_subida_b.items():
-                    df_sheet_b.to_excel(writer_b, sheet_name=sheet_name_b, index=False)
+                st.success(f"✅ Archivo B '{nombre_archivo_subido_b}' importado correctamente en la base de datos B.")
+                time.sleep(1)
+                st.rerun()
 
-            st.success("Base de datos B actualizada con éxito.")
-            time.sleep(1)
-            st.rerun()
-
-        except Exception as e:
-            st.error(f"El archivo B se subió pero hubo un error al procesarlo: {e}")
+            except Exception as e:
+                st.error(f"❌ Error al procesar el archivo B: {e}")
 
 
 
