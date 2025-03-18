@@ -23,7 +23,7 @@ credentials = {
         "user1": {
             "email": "user1@example.com",
             "name": "admin",
-            "password": "$2b$12$j2s41NdHSUTSL.1xEM/GyeKX7dzMZTpyLnq7p/g/j2aldw.KC5FxS"
+            "password": "$2b$12$j2s41NdHSUTSL.1xEM/GyeKX7dzMZTpyLnq7p/g/j2aldw.KC5FxS" 
         },
         "user2": {
             "email": "user2@example.com",
@@ -66,6 +66,87 @@ VERSIONS_DIR = "versions"
 ORIGINAL_FILE = os.path.join(VERSIONS_DIR, "Stock_Original.xlsx")
 
 os.makedirs(VERSIONS_DIR, exist_ok=True)
+
+import calendar
+
+# Función para crear y obtener subcarpeta por año/mes
+def obtener_subcarpeta_versiones():
+    zona_local = pytz.timezone('Europe/Madrid')
+    ahora = datetime.datetime.now(zona_local)
+    nombre_subcarpeta = ahora.strftime("%Y_%m_%B")  # Ej: 2025_03_Marzo
+    ruta_subcarpeta = os.path.join(VERSIONS_DIR, nombre_subcarpeta)
+    os.makedirs(ruta_subcarpeta, exist_ok=True)
+    return ruta_subcarpeta
+
+# Modifica la función original para guardar con subcarpetas
+def crear_nueva_version_filename():
+    ruta_subcarpeta = obtener_subcarpeta_versiones()
+    zona_local = pytz.timezone('Europe/Madrid')
+    fh = datetime.datetime.now(zona_local).strftime("%Y-%m-%d_%H-%M-%S")
+    return os.path.join(ruta_subcarpeta, f"Stock_{fh}.xlsx")
+
+# Explorador visual y subida manual en sidebar
+with st.sidebar.expander("📂 Gestor avanzado de versiones", expanded=False):
+    ruta_actual = obtener_subcarpeta_versiones()
+    
+    # Explorar versiones guardadas
+    st.write(f"**Versiones guardadas en {ruta_actual}:**")
+    archivos_versiones = sorted(os.listdir(ruta_actual), reverse=True)
+
+    if archivos_versiones:
+        versiones_df = pd.DataFrame({
+            "Archivo": archivos_versiones,
+            "Fecha creación": [datetime.datetime.fromtimestamp(
+                os.path.getctime(os.path.join(ruta_actual, f))
+            ).strftime('%d/%m/%Y %H:%M:%S') for f in archivos_versiones]
+        })
+
+        st.dataframe(versiones_df)
+
+        version_gestion = st.selectbox("Seleccione versión para gestionar:", archivos_versiones)
+        ruta_version = os.path.join(ruta_actual, version_gestion)
+
+        col_down, col_del = st.columns(2)
+
+        with col_down:
+            with open(ruta_version, "rb") as version_file:
+                st.download_button(
+                    "Descargar versión",
+                    data=version_file,
+                    file_name=version_gestion,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+
+        with col_del:
+            confirm_eliminar = st.text_input("Escribe ELIMINAR para borrar", key="confirm_del_avanzado")
+            if st.button("Eliminar versión seleccionada"):
+                if confirm_eliminar == "ELIMINAR":
+                    os.remove(ruta_version)
+                    st.success("Versión eliminada correctamente.")
+                    time.sleep(1.5)
+                    st.rerun()
+                else:
+                    st.error("Debes escribir ELIMINAR para confirmar.")
+    else:
+        st.info("No hay versiones guardadas este mes.")
+
+    st.divider()
+
+    # Subir manualmente una versión descargada
+    st.write("**Subir manualmente una versión descargada:**")
+    archivo_subido = st.file_uploader("Subir archivo Excel (.xlsx)", type=["xlsx"])
+
+    if archivo_subido:
+        nombre_archivo_subido = f"Subido_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.xlsx"
+        ruta_guardado = os.path.join(ruta_actual, nombre_archivo_subido)
+
+        with open(ruta_guardado, "wb") as out_file:
+            shutil.copyfileobj(archivo_subido, out_file)
+
+        st.success(f"Archivo '{nombre_archivo_subido}' subido correctamente.")
+        time.sleep(1.5)
+        st.rerun()
+
 
 def init_original():
     if not os.path.exists(ORIGINAL_FILE):
@@ -527,7 +608,7 @@ with colB:
     fped_date = st.date_input("Fecha Pedida",
                               value=fecha_pedida_actual.date() if pd.notna(fecha_pedida_actual) else None,
                               key="fped_date_main")
-    fped_time = st.time_input("Hora Pedidab (opcional)",
+    fped_time = st.time_input("Hora Pedida (opcional)",
                               value=fecha_pedida_actual.time() if pd.notna(fecha_pedida_actual) else datetime.time(0,0),
                               key="fped_time_main")
 with colC:
@@ -557,7 +638,7 @@ comentario_nuevo = st.text_area(
 fped_new = None
 if fped_date is not None:
     dt_ped = datetime.datetime.combine(fped_date, fped_time)
-    fped_new = pd.to_datetime(dt_ped)
+    fped_new = pd.to_datetime(dt_ped) 
 flleg_new = None
 
 if pd.notna(fped_new):
@@ -619,6 +700,7 @@ if st.button("Guardar Cambios en Hoja Stock"):
         ):
             df_main.at[row_index, "Stock"] = stock_actual + uds_actual
             st.info(f"Añadidas {uds_actual} uds => stock={stock_actual + uds_actual}")
+            
 
     if "NºLote" in df_main.columns:
         df_main.at[row_index, "NºLote"] = str(lote_new)
