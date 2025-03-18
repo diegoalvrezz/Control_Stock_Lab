@@ -319,8 +319,8 @@ with st.sidebar.expander("🗃️ Gestor avanzado versiones B (Histórico)", exp
     st.write("**Subir manualmente versión descargada B:**")
 
     # Asegurar que el estado del archivo subido B está definido
-if 'uploaded_file_b' not in st.session_state:
-    st.session_state['uploaded_file_b'] = None
+    if 'uploaded_file_b' not in st.session_state:
+        st.session_state['uploaded_file_b'] = None
 
     st.write("**Subir manualmente versión descargada B:**")
     archivo_subido_b = st.file_uploader("Subir archivo Excel B (.xlsx)", type=["xlsx"], key="uploader_b")
