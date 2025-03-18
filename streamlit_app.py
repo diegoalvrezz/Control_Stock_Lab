@@ -11,6 +11,9 @@ import openpyxl
 import time
 import pytz
 
+STOCK_FILE_B = "Stock_Historico.xlsx"
+VERSIONS_DIR_B = "versions_b"
+ORIGINAL_FILE_B = os.path.join(VERSIONS_DIR_B, "Stock_Historico_Original.xlsx")
 
 st.set_page_config(page_title="Control de Stock con Lotes", layout="centered")
 st.title("🔬 Control Stock Lab. Patología Molécular")
