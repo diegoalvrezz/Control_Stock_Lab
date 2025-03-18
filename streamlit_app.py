@@ -139,6 +139,23 @@ with st.sidebar.expander("📂 Gestor avanzado de versiones", expanded=False):
         st.info("No hay versiones guardadas este mes.")
 
     st.divider()
+        # Eliminar todas las versiones excepto la original
+    st.write("⚠️ **Eliminar TODAS las versiones excepto la original:**")
+    confirm_all_del = st.text_input("Escribe ELIMINAR TODO para confirmar", key="confirm_all_del_a")
+
+    if st.button("🗑️ Eliminar todas las versiones (excepto original)"):
+        if confirm_all_del == "ELIMINAR TODO":
+            for subdir, dirs, files in os.walk(VERSIONS_DIR):
+                for file in files:
+                    ruta_archivo = os.path.join(subdir, file)
+                    # Asegurarse de NO eliminar la versión original
+                    if file != "Stock_Original.xlsx":
+                        os.remove(ruta_archivo)
+            st.success("Todas las versiones eliminadas correctamente excepto la original.")
+            time.sleep(2)
+            st.rerun()
+        else:
+            st.error("Debes escribir 'ELIMINAR TODO' para confirmar.")
 
     # Subir manualmente una versión descargada
     st.write("**Subir manualmente una versión descargada:**")
