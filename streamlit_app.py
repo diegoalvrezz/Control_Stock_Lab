@@ -234,6 +234,23 @@ with st.sidebar.expander("🗃️ Gestor avanzado versiones B (Histórico)", exp
             st.info("No hay versiones guardadas en esta subcarpeta B.")
 
     st.divider()
+        # Eliminar todas las versiones B excepto la original
+    st.write("⚠️ **Eliminar TODAS las versiones B excepto la original:**")
+    confirm_all_del_b = st.text_input("Escribe ELIMINAR TODO para confirmar", key="confirm_all_del_b")
+
+    if st.button("🗑️ Eliminar todas las versiones B (excepto original)"):
+        if confirm_all_del_b == "ELIMINAR TODO":
+            for subdir, dirs, files in os.walk(VERSIONS_DIR_B):
+                for file in files:
+                    ruta_archivo = os.path.join(subdir, file)
+                    # Asegurarse de NO eliminar la versión original
+                    if file != "Stock_Historico_Original.xlsx":
+                        os.remove(ruta_archivo)
+            st.success("Todas las versiones B eliminadas correctamente excepto la original.")
+            time.sleep(2)
+            st.rerun()
+        else:
+            st.error("Debes escribir 'ELIMINAR TODO' para confirmar.")
 
     # Subir manualmente una versión descargada B
     st.write("**Subir manualmente versión descargada B:**")
