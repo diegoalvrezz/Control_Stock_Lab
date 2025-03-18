@@ -190,13 +190,13 @@ with st.sidebar.expander("📂 Gestor avanzado de versiones", expanded=False):
     # Subir manualmente una versión descargada
     st.write("**Subir manualmente una versión descargada:**")
     # Subida robusta con control de estado
-if 'uploaded_file_id' not in st.session_state:
-    st.session_state['uploaded_file_id'] = None
+if 'uploaded_file_name' not in st.session_state:
+    st.session_state['uploaded_file_name'] = None
 
 archivo_subido = st.file_uploader("Subir archivo Excel (.xlsx)", type=["xlsx"])
 
-if archivo_subido and archivo_subido.file_id != st.session_state['uploaded_file_id']:
-    st.session_state['uploaded_file_id'] = archivo_subido.file_id  # Guarda el id del archivo actual
+if archivo_subido and archivo_subido.name != st.session_state['uploaded_file_name']:
+    st.session_state['uploaded_file_name'] = archivo_subido.name  # Guarda el nombre del archivo subido
 
     # Definir claramente ruta_actual para evitar errores
     if subcarpetas:
@@ -219,6 +219,7 @@ if archivo_subido and archivo_subido.file_id != st.session_state['uploaded_file_
         st.rerun()
     except Exception as e:
         st.error(f"Archivo subido pero ocurrió un error al cargar los datos: {e}")
+
 
 
 
