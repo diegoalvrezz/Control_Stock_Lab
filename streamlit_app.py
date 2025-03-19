@@ -452,8 +452,8 @@ def enforce_types(df: pd.DataFrame):
             df[col] = pd.to_datetime(df[col], errors="coerce")
     if "Sitio almacenaje" in df.columns:
         df["Sitio almacenaje"] = df["Sitio almacenaje"].astype(str)
-    if "Caducidad" in df_b_vista.columns:
-        df_b_vista["Caducidad"] = pd.to_datetime(df_b_vista["Caducidad"], errors="coerce")
+    if "Caducidad" in df.columns:
+        df["Caducidad"] = pd.to_datetime(df["Caducidad"], errors="coerce")
 
     if "Stock" in df.columns:
         df["Stock"] = pd.to_numeric(df["Stock"], errors="coerce").fillna(0).astype(int)
