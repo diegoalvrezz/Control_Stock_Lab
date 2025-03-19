@@ -14,7 +14,11 @@ import pytz
 # Configuración de la app
 st.set_page_config(page_title="Control de Stock con Lotes", layout="centered")
 st.title("🔬 Control Stock Lab. Patología Molécular")
+# Asegurar que la carpeta de versiones existe
+os.makedirs(VERSIONS_DIR, exist_ok=True)
 
+# Definir la ruta de archivo original ANTES de usarla
+ORIGINAL_FILE = os.path.join(VERSIONS_DIR, "Stock_Original.xlsx")
 # ---------------------------
 # Autenticación (estructura actualizada)
 # ---------------------------
@@ -169,6 +173,9 @@ with st.sidebar.expander("🗃️ Subir archivo B (.xlsx)"):
 
 
 
+
+
+# Función para inicializar el archivo original si no existe
 def init_original():
     if not os.path.exists(ORIGINAL_FILE):
         if os.path.exists(STOCK_FILE):
@@ -176,7 +183,9 @@ def init_original():
         else:
             st.error(f"No se encontró {STOCK_FILE}.")
 
+# Llamar la función después de definir `ORIGINAL_FILE`
 init_original()
+
 
 def load_data_a():
     try:
