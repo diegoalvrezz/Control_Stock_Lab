@@ -11,10 +11,7 @@ import openpyxl
 import time
 import pytz
 
-STOCK_FILE_B = "Stock_Historico.xlsx"
-VERSIONS_DIR_B = "versions_b"
-ORIGINAL_FILE_B = os.path.join(VERSIONS_DIR_B, "Stock_Historico_Original.xlsx")
-
+# Configuración de la app
 st.set_page_config(page_title="Control de Stock con Lotes", layout="centered")
 st.title("🔬 Control Stock Lab. Patología Molécular")
 
@@ -62,291 +59,104 @@ if st.button("Cerrar sesión"):
     st.rerun()
 
 # -------------------------------------------------------------------------
-# EXCEL A (Stock_Original)
+# GESTIÓN DE EXCEL (A y B)
 # -------------------------------------------------------------------------
 STOCK_FILE = "Stock_Original.xlsx"
+STOCK_FILE_B = "Stock_Historico.xlsx"
 VERSIONS_DIR = "versions"
-ORIGINAL_FILE = os.path.join(VERSIONS_DIR, "Stock_Original.xlsx")
+VERSIONS_DIR_B = "versions_b"
+
+os.makedirs(VERSIONS_DIR, exist_ok=True)
+os.makedirs(VERSIONS_DIR_B, exist_ok=True)
 
 import glob 
 
-def obtener_ultima_version():
+def obtener_ultima_version_A():
     archivos = glob.glob(f"{VERSIONS_DIR}/**/*.xlsx", recursive=True)
     archivos = [f for f in archivos if "Stock_Original.xlsx" not in f]
-    if archivos:
-        ultima_version = max(archivos, key=os.path.getctime)
-        return ultima_version
-    else:
-        return STOCK_FILE  # si no hay versiones, devuelve la original
+    return max(archivos, key=os.path.getctime) if archivos else STOCK_FILE
 
-# Cargar automáticamente última versión guardada al inicio
-archivo_a_cargar = obtener_ultima_version()
+def obtener_ultima_version_B():
+    archivos = glob.glob(f"{VERSIONS_DIR_B}/**/*.xlsx", recursive=True)
+    return max(archivos, key=os.path.getctime) if archivos else STOCK_FILE_B
 
-# Ahora cargamos los datos en session_state con manejo de errores
+# Cargar automáticamente última versión de A y B al inicio
 try:
-    st.session_state["data_dict"] = pd.read_excel(archivo_a_cargar, sheet_name=None, engine="openpyxl")
+    st.session_state["data_dict"] = pd.read_excel(obtener_ultima_version_A(), sheet_name=None, engine="openpyxl")
 except Exception as e:
-    st.error(f"Error al cargar el archivo inicial ({archivo_a_cargar}): {e}")
+    st.error(f"Error al cargar Stock A: {e}")
     st.session_state["data_dict"] = {}
 
+try:
+    st.session_state["data_dict_b"] = pd.read_excel(obtener_ultima_version_B(), sheet_name=None, engine="openpyxl")
+except Exception as e:
+    st.error(f"Error al cargar Stock B: {e}")
+    st.session_state["data_dict_b"] = {}
 
-os.makedirs(VERSIONS_DIR, exist_ok=True)
-VERSIONS_DIR_B = "versions_b"
-os.makedirs(VERSIONS_DIR_B, exist_ok=True)
+# -------------------------------------------------------------------------
+# SUBIDA DE ARCHIVOS - STOCK A
+# -------------------------------------------------------------------------
+with st.sidebar.expander("📂 Subir archivo A (.xlsx)"):
+    archivo_subido_A = st.file_uploader("Seleccionar archivo A", type=["xlsx"], key="uploader_a")
 
-import calendar
+    if archivo_subido_A:
+        if "uploaded_file_name_A" not in st.session_state or archivo_subido_A.name != st.session_state["uploaded_file_name_A"]:
+            st.session_state["uploaded_file_name_A"] = archivo_subido_A.name  # Evita loops
 
-# Función para crear y obtener subcarpeta por año/mes
-def obtener_subcarpeta_versiones():
-    zona_local = pytz.timezone('Europe/Madrid')
-    ahora = datetime.datetime.now(zona_local)
-    nombre_subcarpeta = ahora.strftime("%Y_%m_%B")  # Ej: 2025_03_Marzo
-    ruta_subcarpeta = os.path.join(VERSIONS_DIR, nombre_subcarpeta)
-    os.makedirs(ruta_subcarpeta, exist_ok=True)
-    return ruta_subcarpeta
+            # Guardar el archivo en versiones A
+            ruta_actual_A = os.path.join(VERSIONS_DIR, datetime.datetime.now().strftime("%Y_%m"))
+            os.makedirs(ruta_actual_A, exist_ok=True)
+            ruta_guardado_A = os.path.join(ruta_actual_A, archivo_subido_A.name)
 
-# Modifica la función original para guardar con subcarpetas
-def crear_nueva_version_filename():
-    ruta_subcarpeta = obtener_subcarpeta_versiones()
-    zona_local = pytz.timezone('Europe/Madrid')
-    fh = datetime.datetime.now(zona_local).strftime("%Y-%m-%d_%H-%M-%S")
-    return os.path.join(ruta_subcarpeta, f"Stock_{fh}.xlsx")
-
-# Explorador visual y subida manual en sidebar
-with st.sidebar.expander("📂 Gestor avanzado de versiones", expanded=False):
-    # Lista todas las subcarpetas (cada subcarpeta es un mes)
-    subcarpetas = sorted(
-        [d for d in os.listdir(VERSIONS_DIR) if os.path.isdir(os.path.join(VERSIONS_DIR, d))],
-        reverse=True
-    )
-
-    if subcarpetas:  # Comprueba si la lista tiene elementos
-        # Selector para elegir la subcarpeta (mes)
-        mes_elegido = st.selectbox("📅 Selecciona el mes para explorar versiones:", subcarpetas)
-
-        # Ruta completa a la subcarpeta elegida
-        ruta_actual = os.path.join(VERSIONS_DIR, mes_elegido)
-
-        # Explorar versiones guardadas
-        st.write(f"**Versiones guardadas en {ruta_actual}:**")
-        archivos_versiones = sorted(os.listdir(ruta_actual), reverse=True)
-
-        if archivos_versiones:
-            versiones_df = pd.DataFrame({
-                "Archivo": archivos_versiones,
-                "Fecha creación": [datetime.datetime.fromtimestamp(
-                    os.path.getctime(os.path.join(ruta_actual, f))
-                ).strftime('%d/%m/%Y %H:%M:%S') for f in archivos_versiones]
-            })
-
-            st.dataframe(versiones_df)
-
-            version_gestion = st.selectbox("Seleccione versión para gestionar:", archivos_versiones)
-            ruta_version = os.path.join(ruta_actual, version_gestion)
-
-            col_down, col_del = st.columns(2)
-
-            with col_down:
-                with open(ruta_version, "rb") as version_file:
-                    st.download_button(
-                        "Descargar versión",
-                        data=version_file,
-                        file_name=version_gestion,
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
-
-            with col_del:
-                confirm_eliminar = st.text_input("Escribe ELIMINAR para borrar", key="confirm_del_avanzado")
-                if st.button("Eliminar versión seleccionada"):
-                    if confirm_eliminar == "ELIMINAR":
-                        os.remove(ruta_version)
-                        st.success("Versión eliminada correctamente.")
-                        time.sleep(1.5)
-                        st.rerun()
-                    else:
-                        st.error("Debes escribir ELIMINAR para confirmar.")
-        else:
-            st.info("No hay versiones guardadas en esta subcarpeta.")
-
-    else:  # Mensaje cuando no existen subcarpetas
-        st.info("Actualmente no existen subcarpetas de versiones en el directorio.")
-
-    st.divider()
-
-    # Eliminar todas las versiones excepto la original
-    st.write("⚠️ **Eliminar TODAS las versiones excepto la original:**")
-    confirm_all_del = st.text_input("Escribe ELIMINAR TODO para confirmar", key="confirm_all_del_a")
-
-    if st.button("🗑️ Eliminar todas las versiones (excepto original)"):
-        if confirm_all_del == "ELIMINAR TODO":
-            for subdir, dirs, files in os.walk(VERSIONS_DIR):
-                for file in files:
-                    ruta_archivo = os.path.join(subdir, file)
-                    if file != "Stock_Original.xlsx":
-                        os.remove(ruta_archivo)
-            st.success("Todas las versiones eliminadas correctamente excepto la original.")
-            time.sleep(2)
-            st.rerun()
-        else:
-            st.error("Debes escribir 'ELIMINAR TODO' para confirmar.")
-
-    # 📂 Subir manualmente una versión descargada A (Stock)
-
-    archivo_subido = st.file_uploader("Selecciona archivo A (.xlsx)", type=["xlsx"], key="uploader_a")
-
-    if archivo_subido:
-        if 'uploaded_file_name_a' not in st.session_state or archivo_subido.name != st.session_state['uploaded_file_name_a']:
-            st.session_state['uploaded_file_name_a'] = archivo_subido.name  # Guarda el nombre para evitar bucles
-
-            ruta_actual = obtener_subcarpeta_versiones()
-            nombre_archivo_subido = f"Subido_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.xlsx"
-            ruta_guardado = os.path.join(ruta_actual, nombre_archivo_subido)
-
-            # Guardar el archivo
-            with open(ruta_guardado, "wb") as out_file:
-                shutil.copyfileobj(archivo_subido, out_file)
+            with open(ruta_guardado_A, "wb") as out_file:
+                shutil.copyfileobj(archivo_subido_A, out_file)
 
             try:
-                # Cargar en la base de datos A
-                data_subida = pd.read_excel(ruta_guardado, sheet_name=None, engine="openpyxl")
-                st.session_state["data_dict"] = data_subida
+                # Cargar en memoria
+                data_subida_A = pd.read_excel(ruta_guardado_A, sheet_name=None, engine="openpyxl")
+                st.session_state["data_dict"] = data_subida_A
 
                 # Guardar como archivo principal A
                 with pd.ExcelWriter(STOCK_FILE, engine="openpyxl") as writer:
-                    for sheet_name, df_sheet in data_subida.items():
+                    for sheet_name, df_sheet in data_subida_A.items():
                         df_sheet.to_excel(writer, sheet_name=sheet_name, index=False)
 
-                st.success(f"✅ Archivo '{nombre_archivo_subido}' importado correctamente en la base de datos A.")
+                st.success(f"✅ Archivo '{archivo_subido_A.name}' importado en la base de datos A.")
                 time.sleep(1)
                 st.rerun()
 
             except Exception as e:
                 st.error(f"❌ Error al procesar el archivo A: {e}")
 
+# -------------------------------------------------------------------------
+# SUBIDA DE ARCHIVOS - STOCK B
+# -------------------------------------------------------------------------
+with st.sidebar.expander("🗃️ Subir archivo B (.xlsx)"):
+    archivo_subido_B = st.file_uploader("Seleccionar archivo B", type=["xlsx"], key="uploader_b")
 
+    if archivo_subido_B:
+        if "uploaded_file_name_B" not in st.session_state or archivo_subido_B.name != st.session_state["uploaded_file_name_B"]:
+            st.session_state["uploaded_file_name_B"] = archivo_subido_B.name  # Evita loops
 
+            # Guardar el archivo en versiones B
+            ruta_actual_B = os.path.join(VERSIONS_DIR_B, datetime.datetime.now().strftime("%Y_%m"))
+            os.makedirs(ruta_actual_B, exist_ok=True)
+            ruta_guardado_B = os.path.join(ruta_actual_B, archivo_subido_B.name)
 
-def obtener_subcarpeta_versiones_b():
-    """
-    Crea y obtiene la subcarpeta correspondiente al mes y año actual en versions_b.
-    """
-    zona_local = pytz.timezone('Europe/Madrid')
-    ahora = datetime.datetime.now(zona_local)
-    nombre_subcarpeta_b = ahora.strftime("%Y_%m_%B")  # Ejemplo: "2025_03_Marzo"
-    ruta_subcarpeta_b = os.path.join(VERSIONS_DIR_B, nombre_subcarpeta_b)
-    os.makedirs(ruta_subcarpeta_b, exist_ok=True)  # Crea la carpeta si no existe
-    return ruta_subcarpeta_b
-
-
-
-VERSIONS_DIR_B = "versions_b"
-
-# Explorador visual y subida manual para versiones B
-with st.sidebar.expander("🗃️ Gestor avanzado versiones B (Histórico)", expanded=False):
-    
-    # Lista todas las subcarpetas (cada subcarpeta es un mes) de versiones B
-    subcarpetas_b = sorted(
-        [d for d in os.listdir(VERSIONS_DIR_B) if os.path.isdir(os.path.join(VERSIONS_DIR_B, d))],
-        reverse=True
-    )
-
-    if not subcarpetas_b:
-        st.info("Aún no hay subcarpetas para versiones B.")
-    else:
-        # Selector para elegir la subcarpeta (mes)
-        mes_elegido_b = st.selectbox("📅 Selecciona el mes (Base B):", subcarpetas_b)
-
-        # Ruta completa a la subcarpeta elegida
-        ruta_actual_b = os.path.join(VERSIONS_DIR_B, mes_elegido_b)
-
-        # Explorar versiones guardadas B
-        st.write(f"**Versiones guardadas en {ruta_actual_b}:**")
-        archivos_versiones_b = sorted(os.listdir(ruta_actual_b), reverse=True)
-
-        if archivos_versiones_b:
-            versiones_b_df = pd.DataFrame({
-                "Archivo": archivos_versiones_b,
-                "Fecha creación": [datetime.datetime.fromtimestamp(
-                    os.path.getctime(os.path.join(ruta_actual_b, f))
-                ).strftime('%d/%m/%Y %H:%M:%S') for f in archivos_versiones_b]
-            })
-
-            st.dataframe(versiones_b_df)
-
-            version_gestion_b = st.selectbox("Seleccione versión B para gestionar:", archivos_versiones_b)
-            ruta_version_b = os.path.join(ruta_actual_b, version_gestion_b)
-
-            col_down_b, col_del_b = st.columns(2)
-
-            with col_down_b:
-                with open(ruta_version_b, "rb") as version_file_b:
-                    st.download_button(
-                        "Descargar versión B",
-                        data=version_file_b,
-                        file_name=version_gestion_b,
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
-
-            with col_del_b:
-                confirm_eliminar_b = st.text_input("Escribe ELIMINAR para borrar versión B", key="confirm_del_avanzado_b")
-                if st.button("Eliminar versión B seleccionada"):
-                    if confirm_eliminar_b == "ELIMINAR":
-                        os.remove(ruta_version_b)
-                        st.success("Versión B eliminada correctamente.")
-                        time.sleep(1.5)
-                        st.rerun()
-                    else:
-                        st.error("Debes escribir ELIMINAR para confirmar.")
-        else:
-            st.info("No hay versiones guardadas en esta subcarpeta B.")
-
-    st.divider()
-        # Eliminar todas las versiones B excepto la original
-    st.write("⚠️ **Eliminar TODAS las versiones B excepto la original:**")
-    confirm_all_del_b = st.text_input("Escribe ELIMINAR TODO para confirmar", key="confirm_all_del_b")
-
-    if st.button("🗑️ Eliminar todas las versiones B (excepto original)"):
-        if confirm_all_del_b == "ELIMINAR TODO":
-            for subdir, dirs, files in os.walk(VERSIONS_DIR_B):
-                for file in files:
-                    ruta_archivo = os.path.join(subdir, file)
-                    # Asegurarse de NO eliminar la versión original
-                    if file != "Stock_Historico_Original.xlsx":
-                        os.remove(ruta_archivo)
-            st.success("Todas las versiones B eliminadas correctamente excepto la original.")
-            time.sleep(2)
-            st.rerun()
-        else:
-            st.error("Debes escribir 'ELIMINAR TODO' para confirmar.")
-
-    # Subir manualmente una versión descargada B
-    st.write("**Subir manualmente una versión descargada B:**")
-
-    archivo_subido_b = st.file_uploader("Selecciona archivo B (.xlsx)", type=["xlsx"], key="uploader_b")
-
-    if archivo_subido_b:
-        if 'uploaded_file_name_b' not in st.session_state or archivo_subido_b.name != st.session_state['uploaded_file_name_b']:
-            st.session_state['uploaded_file_name_b'] = archivo_subido_b.name  # Guarda el nombre para evitar bucles
-
-            ruta_actual_b = obtener_subcarpeta_versiones_b()
-            nombre_archivo_subido_b = f"SubidoB_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.xlsx"
-            ruta_guardado_b = os.path.join(ruta_actual_b, nombre_archivo_subido_b)
-
-            # Guardar el archivo
-            with open(ruta_guardado_b, "wb") as out_file_b:
-                shutil.copyfileobj(archivo_subido_b, out_file_b)
+            with open(ruta_guardado_B, "wb") as out_file:
+                shutil.copyfileobj(archivo_subido_B, out_file)
 
             try:
-                # Cargar en la base de datos B
-                data_subida_b = pd.read_excel(ruta_guardado_b, sheet_name=None, engine="openpyxl")
-                st.session_state["data_dict_b"] = data_subida_b
+                # Cargar en memoria
+                data_subida_B = pd.read_excel(ruta_guardado_B, sheet_name=None, engine="openpyxl")
+                st.session_state["data_dict_b"] = data_subida_B
 
                 # Guardar como archivo principal B
-                with pd.ExcelWriter(STOCK_FILE_B, engine="openpyxl") as writer_b:
-                    for sheet_name_b, df_sheet_b in data_subida_b.items():
-                        df_sheet_b.to_excel(writer_b, sheet_name=sheet_name_b, index=False)
+                with pd.ExcelWriter(STOCK_FILE_B, engine="openpyxl") as writer:
+                    for sheet_name, df_sheet in data_subida_B.items():
+                        df_sheet.to_excel(writer, sheet_name=sheet_name, index=False)
 
-                st.success(f"✅ Archivo B '{nombre_archivo_subido_b}' importado correctamente en la base de datos B.")
+                st.success(f"✅ Archivo '{archivo_subido_B.name}' importado en la base de datos B.")
                 time.sleep(1)
                 st.rerun()
 
