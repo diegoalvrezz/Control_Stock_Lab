@@ -678,11 +678,16 @@ comentario_nuevo = st.text_area(
     value=comentario_actual,
     key="comentario_input_key"
 )
+import pytz
+
+zone = pytz.timezone("Europe/Madrid")
+
 fped_new = None
 if fped_date is not None:
     dt_ped = datetime.datetime.combine(fped_date, fped_time)
-    fped_new = pd.to_datetime(dt_ped) 
-flleg_new = None
+    dt_ped_local = zone.localize(dt_ped)  # localiza con DST
+    # fped_new sigue siendo un datetime, que en Excel podría verse raro
+    fped_new = dt_ped_local
 
 if pd.notna(fped_new):
     group_id = df_for_style.at[row_index,"GroupID"]
