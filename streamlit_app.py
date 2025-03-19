@@ -14,6 +14,13 @@ import pytz
 # Configuración de la app
 st.set_page_config(page_title="Control de Stock con Lotes", layout="centered")
 st.title("🔬 Control Stock Lab. Patología Molécular")
+
+
+STOCK_FILE = "Stock_Original.xlsx"
+STOCK_FILE_B = "Stock_Historico.xlsx"
+VERSIONS_DIR = "versions"
+VERSIONS_DIR_B = "versions_b"
+
 # Asegurar que la carpeta de versiones existe
 os.makedirs(VERSIONS_DIR, exist_ok=True)
 
