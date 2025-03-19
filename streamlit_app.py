@@ -737,6 +737,11 @@ else:
     sitio_new = sel_top
 group_order_selected = None
 
+flleg_new = None
+if flleg_date is not None:
+    dt_lleg = datetime.datetime.combine(flleg_date, flleg_time)
+    flleg_new = dt_lleg.strftime("%Y-%m-%d %H:%M:%S")  # o lo que necesites
+
 if st.button("Guardar Cambios en Hoja Stock"):
     if pd.notna(flleg_new):
         fped_new = pd.NaT
