@@ -10,17 +10,17 @@ import itertools
 import openpyxl
 import time
 import pytz
+import glob
 
-STOCK_FILE_B = "Stock_Historico.xlsx"
-VERSIONS_DIR_B = "versions_b"
-ORIGINAL_FILE_B = os.path.join(VERSIONS_DIR_B, "Stock_Historico_Original.xlsx")
-
+# ---------------------------------------------------------------------------------
+# Ajustes Generales
+# ---------------------------------------------------------------------------------
 st.set_page_config(page_title="Control de Stock con Lotes", layout="centered")
 st.title("🔬 Control Stock Lab. Patología Molécular")
 
-# ---------------------------
-# Autenticación (estructura actualizada)
-# ---------------------------
+# ---------------------------------------------------------------------------------
+# Autenticación
+# ---------------------------------------------------------------------------------
 credentials = {
     "usernames": {
         "user1": {
@@ -61,74 +61,103 @@ if st.button("Cerrar sesión"):
     authenticator.logout()
     st.rerun()
 
-# -------------------------------------------------------------------------
-# EXCEL A (Stock_Original)
-# -------------------------------------------------------------------------
-STOCK_FILE = "Stock_Original.xlsx"
-VERSIONS_DIR = "versions"
-ORIGINAL_FILE = os.path.join(VERSIONS_DIR, "Stock_Original.xlsx")
-
-import glob
-
-def obtener_ultima_version():
-    archivos = glob.glob(f"{VERSIONS_DIR}/**/*.xlsx", recursive=True)
-    archivos = [f for f in archivos if "Stock_Original.xlsx" not in f]
-    if archivos:
-        ultima_version = max(archivos, key=os.path.getctime)
-        return ultima_version
-    else:
-        return STOCK_FILE  # si no hay versiones, devuelve la original
-
-# Cargar automáticamente última versión guardada al inicio
-archivo_a_cargar = obtener_ultima_version()
-
-# Ahora cargamos los datos en session_state con manejo de errores
-try:
-    st.session_state["data_dict"] = pd.read_excel(archivo_a_cargar, sheet_name=None, engine="openpyxl")
-except Exception as e:
-    st.error(f"Error al cargar el archivo inicial ({archivo_a_cargar}): {e}")
-    st.session_state["data_dict"] = {}
+# ---------------------------------------------------------------------------------
+# Directorios de versiones (locales)
+# ---------------------------------------------------------------------------------
+VERSIONS_DIR = "versions"         # Para la base de datos A
+VERSIONS_DIR_B = "versions_b"     # Para la base de datos B (Histórico)
 
 os.makedirs(VERSIONS_DIR, exist_ok=True)
 os.makedirs(VERSIONS_DIR_B, exist_ok=True)
 
-import calendar
-
-def obtener_subcarpeta_versiones():
+# ---------------------------------------------------------------------------------
+# Funciones auxiliares
+# ---------------------------------------------------------------------------------
+def obtener_subcarpeta_versiones(base_dir: str) -> str:
+    """Devuelve y crea si es necesario la subcarpeta para el mes/año actual."""
     zona_local = pytz.timezone('Europe/Madrid')
     ahora = datetime.datetime.now(zona_local)
     nombre_subcarpeta = ahora.strftime("%Y_%m_%B")  # Ej: 2025_03_Marzo
-    ruta_subcarpeta = os.path.join(VERSIONS_DIR, nombre_subcarpeta)
+    ruta_subcarpeta = os.path.join(base_dir, nombre_subcarpeta)
     os.makedirs(ruta_subcarpeta, exist_ok=True)
     return ruta_subcarpeta
 
-def crear_nueva_version_filename():
-    ruta_subcarpeta = obtener_subcarpeta_versiones()
+def crear_nueva_version_filename(base_dir: str, prefix="Stock"):
+    """Genera un nombre de archivo único con fecha/hora en la carpeta base_dir."""
+    ruta_subcarpeta = obtener_subcarpeta_versiones(base_dir)
     zona_local = pytz.timezone('Europe/Madrid')
     fh = datetime.datetime.now(zona_local).strftime("%Y-%m-%d_%H-%M-%S")
-    return os.path.join(ruta_subcarpeta, f"Stock_{fh}.xlsx")
+    return os.path.join(ruta_subcarpeta, f"{prefix}_{fh}.xlsx")
 
-# Explorador visual y subida manual en sidebar
-with st.sidebar.expander("📂 Gestor avanzado de versiones", expanded=False):
-    subcarpetas = sorted(
+def generar_excel_en_memoria(df_act: pd.DataFrame, sheet_nm="Hoja1"):
+    """Devuelve un Excel en memoria (bytes) con la hoja 'sheet_nm'."""
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df_act.to_excel(writer, sheet_name=sheet_nm, index=False)
+    output.seek(0)
+    return output.getvalue()
+
+def obtener_ultima_version(base_dir: str, exclude_pattern=None):
+    """
+    Devuelve la ruta a la versión más reciente en base_dir (recursivo).
+    Si 'exclude_pattern' está definido, se excluyen archivos que lo contengan en su nombre.
+    """
+    archivos = glob.glob(f"{base_dir}/**/*.xlsx", recursive=True)
+    if exclude_pattern:
+        archivos = [f for f in archivos if exclude_pattern not in f]
+    if archivos:
+        ultima = max(archivos, key=os.path.getctime)
+        return ultima
+    return None
+
+# ---------------------------------------------------------------------------------
+# Inicialización de Session State
+# ---------------------------------------------------------------------------------
+# 'data_dict' => para la base A
+# 'data_dict_b' => para la base B (Histórico)
+if "data_dict" not in st.session_state:
+    st.session_state["data_dict"] = {}
+
+if "data_dict_b" not in st.session_state:
+    st.session_state["data_dict_b"] = {}
+
+# ---------------------------------------------------------------------------------
+# SideBar: subida/gestor de versiones para la base A
+# ---------------------------------------------------------------------------------
+st.sidebar.header("Gestor de la Base A")
+
+with st.sidebar.expander("Cargar / Explorar versiones (A)", expanded=False):
+    # Intentar cargar la última versión si no hay datos en session_state
+    if not st.session_state["data_dict"]:
+        ultima_a = obtener_ultima_version(VERSIONS_DIR, exclude_pattern="SubidoB_")
+        if ultima_a:
+            try:
+                data_a = pd.read_excel(ultima_a, sheet_name=None, engine="openpyxl")
+                st.session_state["data_dict"] = data_a
+                st.info(f"Se cargó automáticamente la última versión A: {ultima_a}")
+            except Exception as e:
+                st.error(f"Error al cargar '{ultima_a}': {e}")
+
+    # Desplegamos subcarpetas de versiones
+    subcarpetas_a = sorted(
         [d for d in os.listdir(VERSIONS_DIR) if os.path.isdir(os.path.join(VERSIONS_DIR, d))],
         reverse=True
     )
 
-    if subcarpetas:
-        mes_elegido = st.selectbox("📅 Selecciona el mes para explorar versiones:", subcarpetas)
+    if subcarpetas_a:
+        mes_elegido = st.selectbox("📅 Mes para explorar versiones A:", subcarpetas_a)
         ruta_actual = os.path.join(VERSIONS_DIR, mes_elegido)
 
         st.write(f"**Versiones guardadas en {ruta_actual}:**")
         archivos_versiones = sorted(os.listdir(ruta_actual), reverse=True)
-
         if archivos_versiones:
             import datetime
             versiones_df = pd.DataFrame({
                 "Archivo": archivos_versiones,
                 "Fecha creación": [
                     datetime.datetime.fromtimestamp(os.path.getctime(os.path.join(ruta_actual, f))
-                ).strftime('%d/%m/%Y %H:%M:%S') for f in archivos_versiones]
+                    ).strftime('%d/%m/%Y %H:%M:%S') for f in archivos_versiones
+                ]
             })
             st.dataframe(versiones_df)
 
@@ -156,79 +185,66 @@ with st.sidebar.expander("📂 Gestor avanzado de versiones", expanded=False):
                         st.error("Debes escribir ELIMINAR para confirmar.")
         else:
             st.info("No hay versiones guardadas en esta subcarpeta.")
-
     else:
-        st.info("Actualmente no existen subcarpetas de versiones en el directorio.")
+        st.info("No hay subcarpetas de versiones para A.")
 
     st.divider()
-    st.write("⚠️ **Eliminar TODAS las versiones excepto la original:**")
-    confirm_all_del = st.text_input("Escribe ELIMINAR TODO para confirmar", key="confirm_all_del_a")
-
-    if st.button("🗑️ Eliminar todas las versiones (excepto original)"):
-        if confirm_all_del == "ELIMINAR TODO":
+    st.write("⚠️ **Eliminar TODAS las versiones A**")
+    confirm_all_del_a = st.text_input("Escribe ELIMINAR TODO para confirmar", key="confirm_all_del_a")
+    if st.button("🗑️ Eliminar todas las versiones A"):
+        if confirm_all_del_a == "ELIMINAR TODO":
             for subdir, dirs, files in os.walk(VERSIONS_DIR):
                 for file in files:
-                    ruta_archivo = os.path.join(subdir, file)
-                    if file != "Stock_Original.xlsx":
-                        os.remove(ruta_archivo)
-            st.success("Todas las versiones eliminadas correctamente excepto la original.")
+                    os.remove(os.path.join(subdir, file))
+            st.success("Todas las versiones de A han sido eliminadas.")
             time.sleep(2)
             st.rerun()
         else:
             st.error("Debes escribir 'ELIMINAR TODO' para confirmar.")
 
-    archivo_subido = st.file_uploader("Selecciona archivo A (.xlsx)", type=["xlsx"], key="uploader_a")
-    if archivo_subido:
-        if 'uploaded_file_name_a' not in st.session_state or archivo_subido.name != st.session_state['uploaded_file_name_a']:
-            st.session_state['uploaded_file_name_a'] = archivo_subido.name
-            ruta_actual = obtener_subcarpeta_versiones()
-            nombre_archivo_subido = f"Subido_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.xlsx"
-            ruta_guardado = os.path.join(ruta_actual, nombre_archivo_subido)
+    # Subir archivo A manualmente
+    archivo_subido_a = st.file_uploader("Subir archivo A (.xlsx)", type=["xlsx"], key="uploader_a")
+    if archivo_subido_a:
+        nombre_archivo_subido = f"SubidoA_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.xlsx"
+        ruta_sub = obtener_subcarpeta_versiones(VERSIONS_DIR)
+        ruta_guardado = os.path.join(ruta_sub, nombre_archivo_subido)
 
-            with open(ruta_guardado, "wb") as out_file:
-                shutil.copyfileobj(archivo_subido, out_file)
+        with open(ruta_guardado, "wb") as out_file:
+            shutil.copyfileobj(archivo_subido_a, out_file)
 
+        try:
+            data_subida = pd.read_excel(ruta_guardado, sheet_name=None, engine="openpyxl")
+            st.session_state["data_dict"] = data_subida
+            st.success(f"✅ Archivo A '{nombre_archivo_subido}' importado correctamente.")
+            st.experimental_rerun()
+        except Exception as e:
+            st.error(f"❌ Error al procesar el archivo A: {e}")
+
+# ---------------------------------------------------------------------------------
+# SideBar: subida/gestor de versiones para la base B (Histórico)
+# ---------------------------------------------------------------------------------
+st.sidebar.header("Gestor de la Base B (Histórico)")
+
+with st.sidebar.expander("Cargar / Explorar versiones (B)", expanded=False):
+    if not st.session_state["data_dict_b"]:
+        ultima_b = obtener_ultima_version(VERSIONS_DIR_B, exclude_pattern="SubidoA_")
+        if ultima_b:
             try:
-                data_subida = pd.read_excel(ruta_guardado, sheet_name=None, engine="openpyxl")
-                st.session_state["data_dict"] = data_subida
-                with pd.ExcelWriter(STOCK_FILE, engine="openpyxl") as writer:
-                    for sheet_name, df_sheet in data_subida.items():
-                        df_sheet.to_excel(writer, sheet_name=sheet_name, index=False)
-                st.success(f"✅ Archivo '{nombre_archivo_subido}' importado correctamente en la base de datos A.")
-                time.sleep(1)
-                st.rerun()
+                data_b = pd.read_excel(ultima_b, sheet_name=None, engine="openpyxl")
+                st.session_state["data_dict_b"] = data_b
+                st.info(f"Se cargó automáticamente la última versión B: {ultima_b}")
             except Exception as e:
-                st.error(f"❌ Error al procesar el archivo A: {e}")
+                st.error(f"Error al cargar '{ultima_b}': {e}")
 
-
-VERSIONS_DIR_B = "versions_b"
-
-def obtener_subcarpeta_versiones_b():
-    zona_local = pytz.timezone('Europe/Madrid')
-    ahora = datetime.datetime.now(zona_local)
-    nombre_subcarpeta_b = ahora.strftime("%Y_%m_%B")
-    ruta_subcarpeta_b = os.path.join(VERSIONS_DIR_B, nombre_subcarpeta_b)
-    os.makedirs(ruta_subcarpeta_b, exist_ok=True)
-    return ruta_subcarpeta_b
-
-def crear_nueva_version_filename_b():
-    ruta_subcarpeta_b = obtener_subcarpeta_versiones_b()
-    zona_local = pytz.timezone('Europe/Madrid')
-    fh = datetime.datetime.now(zona_local).strftime("%Y-%m-%d_%H-%M-%S")
-    return os.path.join(ruta_subcarpeta_b, f"StockB_{fh}.xlsx")
-
-# Explorador visual y subida manual para versiones B
-with st.sidebar.expander("🗃️ Gestor avanzado versiones B (Histórico)", expanded=False):
     subcarpetas_b = sorted(
         [d for d in os.listdir(VERSIONS_DIR_B) if os.path.isdir(os.path.join(VERSIONS_DIR_B, d))],
         reverse=True
     )
 
-    if not subcarpetas_b:
-        st.info("Aún no hay subcarpetas para versiones B.")
-    else:
-        mes_elegido_b = st.selectbox("📅 Selecciona el mes (Base B):", subcarpetas_b)
+    if subcarpetas_b:
+        mes_elegido_b = st.selectbox("📅 Mes para explorar versiones B:", subcarpetas_b)
         ruta_actual_b = os.path.join(VERSIONS_DIR_B, mes_elegido_b)
+
         st.write(f"**Versiones guardadas en {ruta_actual_b}:**")
         archivos_versiones_b = sorted(os.listdir(ruta_actual_b), reverse=True)
 
@@ -238,11 +254,12 @@ with st.sidebar.expander("🗃️ Gestor avanzado versiones B (Histórico)", exp
                 "Archivo": archivos_versiones_b,
                 "Fecha creación": [
                     datetime.datetime.fromtimestamp(os.path.getctime(os.path.join(ruta_actual_b, f))
-                ).strftime('%d/%m/%Y %H:%M:%S') for f in archivos_versiones_b]
+                    ).strftime('%d/%m/%Y %H:%M:%S') for f in archivos_versiones_b
+                ]
             })
             st.dataframe(versiones_b_df)
 
-            version_gestion_b = st.selectbox("Seleccione versión B para gestionar:", archivos_versiones_b)
+            version_gestion_b = st.selectbox("Seleccione versión B:", archivos_versiones_b)
             ruta_version_b = os.path.join(ruta_actual_b, version_gestion_b)
 
             col_down_b, col_del_b = st.columns(2)
@@ -265,102 +282,46 @@ with st.sidebar.expander("🗃️ Gestor avanzado versiones B (Histórico)", exp
                     else:
                         st.error("Debes escribir ELIMINAR para confirmar.")
         else:
-            st.info("No hay versiones guardadas en esta subcarpeta B.")
+            st.info("No hay versiones B guardadas en esta subcarpeta.")
+    else:
+        st.info("No hay subcarpetas de versiones B.")
 
     st.divider()
-    st.write("⚠️ **Eliminar TODAS las versiones B excepto la original:**")
+    st.write("⚠️ **Eliminar TODAS las versiones B**")
     confirm_all_del_b = st.text_input("Escribe ELIMINAR TODO para confirmar", key="confirm_all_del_b")
-
-    if st.button("🗑️ Eliminar todas las versiones B (excepto original)"):
+    if st.button("🗑️ Eliminar todas las versiones B"):
         if confirm_all_del_b == "ELIMINAR TODO":
             for subdir, dirs, files in os.walk(VERSIONS_DIR_B):
                 for file in files:
-                    ruta_archivo = os.path.join(subdir, file)
-                    if file != "Stock_Historico_Original.xlsx":
-                        os.remove(ruta_archivo)
-            st.success("Todas las versiones B eliminadas correctamente excepto la original.")
+                    os.remove(os.path.join(subdir, file))
+            st.success("Todas las versiones de B han sido eliminadas.")
             time.sleep(2)
             st.rerun()
         else:
             st.error("Debes escribir 'ELIMINAR TODO' para confirmar.")
 
-    archivo_subido_b = st.file_uploader("Selecciona archivo B (.xlsx)", type=["xlsx"], key="uploader_b")
-
+    # Subir archivo B manualmente
+    archivo_subido_b = st.file_uploader("Subir archivo B (.xlsx)", type=["xlsx"], key="uploader_b")
     if archivo_subido_b:
-        if 'uploaded_file_name_b' not in st.session_state or archivo_subido_b.name != st.session_state['uploaded_file_name_b']:
-            st.session_state['uploaded_file_name_b'] = archivo_subido_b.name
-            ruta_actual_b = obtener_subcarpeta_versiones_b()
-            nombre_archivo_subido_b = f"SubidoB_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.xlsx"
-            ruta_guardado_b = os.path.join(ruta_actual_b, nombre_archivo_subido_b)
+        nombre_archivo_subido_b = f"SubidoB_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.xlsx"
+        ruta_sub_b = obtener_subcarpeta_versiones(VERSIONS_DIR_B)
+        ruta_guardado_b = os.path.join(ruta_sub_b, nombre_archivo_subido_b)
 
-            with open(ruta_guardado_b, "wb") as out_file_b:
-                shutil.copyfileobj(archivo_subido_b, out_file_b)
+        with open(ruta_guardado_b, "wb") as out_file_b:
+            shutil.copyfileobj(archivo_subido_b, out_file_b)
 
-            try:
-                data_subida_b = pd.read_excel(ruta_guardado_b, sheet_name=None, engine="openpyxl")
-                st.session_state["data_dict_b"] = data_subida_b
-                with pd.ExcelWriter(STOCK_FILE_B, engine="openpyxl") as writer_b:
-                    for sheet_name_b, df_sheet_b in data_subida_b.items():
-                        df_sheet_b.to_excel(writer_b, sheet_name=sheet_name_b, index=False)
-                st.success(f"✅ Archivo B '{nombre_archivo_subido_b}' importado correctamente en la base de datos B.")
-                time.sleep(1)
-                st.rerun()
-            except Exception as e:
-                st.error(f"❌ Error al procesar el archivo B: {e}")
+        try:
+            data_subida_b = pd.read_excel(ruta_guardado_b, sheet_name=None, engine="openpyxl")
+            st.session_state["data_dict_b"] = data_subida_b
+            st.success(f"✅ Archivo B '{nombre_archivo_subido_b}' importado correctamente.")
+            st.experimental_rerun()
+        except Exception as e:
+            st.error(f"❌ Error al procesar el archivo B: {e}")
 
 
-def init_original():
-    if not os.path.exists(ORIGINAL_FILE):
-        if os.path.exists(STOCK_FILE):
-            shutil.copy(STOCK_FILE, ORIGINAL_FILE)
-        else:
-            st.error(f"No se encontró {STOCK_FILE}.")
-
-init_original()
-
-def load_data_a():
-    try:
-        data = pd.read_excel(STOCK_FILE, sheet_name=None, engine="openpyxl")
-        for sheet, df_sheet in data.items():
-            if "Restantes" in df_sheet.columns:
-                df_sheet.drop(columns=["Restantes"], inplace=True, errors="ignore")
-        return data
-    except FileNotFoundError:
-        st.error("No se encontró Stock_Original.xlsx.")
-        return {}
-    except Exception as e:
-        st.error(f"Error al cargar Stock_Original: {e}")
-        return {}
-
-# -------------------------------------------------------------------------
-# EXCEL B (Stock_Historico)
-# -------------------------------------------------------------------------
-STOCK_FILE_B = "Stock_Historico.xlsx"
-
-os.makedirs(VERSIONS_DIR_B, exist_ok=True)
-
-def init_original_b():
-    if not os.path.exists(ORIGINAL_FILE_B):
-        if os.path.exists(STOCK_FILE_B):
-            shutil.copy(STOCK_FILE_B, ORIGINAL_FILE_B)
-        else:
-            df_empty = pd.DataFrame(columns=[
-                "Ref. Saturno","Ref. Fisher","Nombre producto","NºLote","Caducidad",
-                "Fecha Pedida","Fecha Llegada","Sitio almacenaje","Uds.","Stock"
-            ])
-            with pd.ExcelWriter(STOCK_FILE_B, engine="openpyxl") as writer:
-                df_empty.to_excel(writer, sheet_name="Hoja1", index=False)
-            shutil.copy(STOCK_FILE_B, ORIGINAL_FILE_B)
-
-init_original_b()
-
-def generar_excel_en_memoria(df_act: pd.DataFrame, sheet_nm="Hoja1"):
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        df_act.to_excel(writer, sheet_name=sheet_nm, index=False)
-    output.seek(0)
-    return output.getvalue()
-
+# ---------------------------------------------------------------------------------
+# Funciones de normalización
+# ---------------------------------------------------------------------------------
 def enforce_types(df: pd.DataFrame):
     if "Ref. Saturno" in df.columns:
         df["Ref. Saturno"] = pd.to_numeric(df["Ref. Saturno"], errors="coerce").fillna(0).astype(int)
@@ -379,33 +340,30 @@ def enforce_types(df: pd.DataFrame):
             df[col] = pd.to_datetime(df[col], errors="coerce")
     if "Sitio almacenaje" in df.columns:
         df["Sitio almacenaje"] = df["Sitio almacenaje"].astype(str)
-    if "Caducidad" in df.columns:
-        df["Caducidad"] = pd.to_datetime(df["Caducidad"], errors="coerce")
     if "Stock" in df.columns:
         df["Stock"] = pd.to_numeric(df["Stock"], errors="coerce").fillna(0).astype(int)
     return df
 
-def load_data_b():
-    if not os.path.exists(STOCK_FILE_B):
-        return {}
-    try:
-        data_b = pd.read_excel(STOCK_FILE_B, sheet_name=None, engine="openpyxl")
-        for sheetb, dfb in data_b.items():
-            if "Restantes" in dfb.columns:
-                dfb.drop(columns=["Restantes"], inplace=True, errors="ignore")
-        return data_b
-    except:
-        return {}
+# ---------------------------------------------------------------------------------
+# Verificamos si hay datos en session_state, si no => app no puede continuar
+# ---------------------------------------------------------------------------------
+if not st.session_state["data_dict"]:
+    st.warning("No se ha cargado ninguna base A. Sube un archivo en la barra lateral para continuar.")
+    st.stop()
 
-if "data_dict" not in st.session_state:
-    st.session_state["data_dict"] = load_data_a()
+if not st.session_state["data_dict_b"]:
+    st.info("Aún no se ha cargado la base B (Histórico). Puedes continuar, pero no habrá historial disponible.")
 
-if "data_dict_b" not in st.session_state:
-    st.session_state["data_dict_b"] = load_data_b()
-
+# ---------------------------------------------------------------------------------
+# A partir de aquí, la lógica principal de tu aplicación
+# ---------------------------------------------------------------------------------
+# Renombramos para simplificar
 data_dict = st.session_state["data_dict"]
 data_dict_b = st.session_state["data_dict_b"]
 
+# -------------------------------------------------------------------------
+# Lógica de configuración de Lotes (colores, etc.)
+# -------------------------------------------------------------------------
 LOTS_DATA = {
     "FOCUS": {
         "Panel Oncomine Focus Library Assay Chef Ready": [
@@ -520,22 +478,19 @@ st.markdown(
 )
 
 st.markdown("### Información")
-st.write("← Recuerde que en la barra lateral puede gestionar las versiones. Despliegue para consultarlo.")
+st.write("← En la barra lateral se gestionan las versiones. ¡No se sube nada sensible al repositorio!")
 st.divider()
 
 # -------------------------------------------------------------------------
-# CUERPO PRINCIPAL => Edición en Hoja Principal (A)
+# CUERPO PRINCIPAL: Edición en la Base A
 # -------------------------------------------------------------------------
-st.header("Gestión del Stock")
+st.header("Gestión del Stock (Base A)")
 
-if not st.session_state["data_dict"]:
-    st.error("No se pudo cargar la base de datos (A).")
-    st.stop()
-
-hojas_principales = list(st.session_state["data_dict"].keys())
+# 1) Selección de hoja principal
+hojas_principales = list(data_dict.keys())
 sheet_name = st.selectbox("Seleccione el panel:", hojas_principales, key="main_sheet_sel")
 
-df_main_original = st.session_state["data_dict"][sheet_name].copy()
+df_main_original = data_dict[sheet_name].copy()
 df_main_original = enforce_types(df_main_original)
 
 df_for_style = df_main_original.copy()
@@ -553,9 +508,10 @@ table_html = styled_df.to_html(columns=final_cols)
 df_main = df_for_style.copy()
 df_main.drop(columns=cols_to_hide, inplace=True, errors="ignore")
 
-st.write(f"#### Stock del Panel {sheet_name}")
+st.write(f"#### Stock del Panel: {sheet_name}")
 st.write(table_html, unsafe_allow_html=True)
 
+# 2) Selección de reactivo a modificar
 if "Nombre producto" in df_main.columns and "Ref. Fisher" in df_main.columns:
     display_series = df_main.apply(lambda r: f"{r['Nombre producto']} ({r['Ref. Fisher']})", axis=1)
 else:
@@ -564,7 +520,7 @@ else:
 reactivo_sel = st.selectbox("Seleccione Reactivo a Modificar:", display_series.unique(), key="react_modif")
 row_index = display_series[display_series == reactivo_sel].index[0]
 
-st.write("**Recuerde que no es necesario ingresar la fecha pedida si se está ingresando la fecha llegada**")
+st.write("**No es necesario ingresar 'Fecha Pedida' si se ingresa 'Fecha Llegada', y viceversa.**")
 
 def get_val(col, default=None):
     return df_main.at[row_index, col] if col in df_main.columns else default
@@ -578,11 +534,9 @@ uds_actual = get_val("Uds.", 0)
 stock_actual = get_val("Stock", 0)
 
 colA, colB, colC, colD = st.columns([1, 1, 1, 1])
-
 with colA:
     lote_new = st.text_input("Nº de Lote", value=str(lote_actual))
     cad_new = st.date_input("Caducidad", value=caducidad_actual if pd.notna(caducidad_actual) else None)
-
 with colB:
     fped_date = st.date_input(
         "Fecha Pedida",
@@ -594,7 +548,6 @@ with colB:
         value=fecha_pedida_actual.time() if pd.notna(fecha_pedida_actual) else datetime.time(0,0),
         key="fped_time_main",
     )
-
 with colC:
     flleg_date = st.date_input(
         "Fecha Llegada",
@@ -606,45 +559,43 @@ with colC:
         value=fecha_llegada_actual.time() if pd.notna(fecha_llegada_actual) else datetime.time(0,0),
         key="flleg_time_main",
     )
-
 with colD:
     st.write("")
     st.write("")
     if st.button("Refrescar Página"):
         st.rerun()
 
-comentario_actual = ""
-if "Comentario" in df_main.columns:
-    comentario_actual = str(df_main.at[row_index, "Comentario"])
+comentario_actual = str(get_val("Comentario", ""))
 comentario_nuevo = st.text_area("Comentario (opcional)", value=comentario_actual, key="comentario_input_key")
 
-# Para usar zona horaria local y guardar como string:
+# Fechas con zona horaria
 zone = pytz.timezone("Europe/Madrid")
 
 # Procesar Fecha Pedida
-fped_new = None
 if fped_date is not None:
     dt_ped = datetime.datetime.combine(fped_date, fped_time)
-    dt_ped_local = zone.localize(dt_ped)  # localizamos con DST
+    dt_ped_local = zone.localize(dt_ped)
     fped_new_str = dt_ped_local.strftime("%Y-%m-%d %H:%M:%S")
 else:
     fped_new_str = None
 
 # Procesar Fecha Llegada
-flleg_new_str = None
 if flleg_date is not None:
     dt_lleg = datetime.datetime.combine(flleg_date, flleg_time)
     dt_lleg_local = zone.localize(dt_lleg)
     flleg_new_str = dt_lleg_local.strftime("%Y-%m-%d %H:%M:%S")
+else:
+    flleg_new_str = None
 
 # Preparar la lógica de "group_order_selected"
 group_id = df_for_style.at[row_index, "GroupID"]
 group_reactivos = df_for_style[df_for_style["GroupID"] == group_id]
+options = []
 group_order_selected = None
-if fped_new_str is not None:
+if fped_new_str:
     if not group_reactivos.empty:
         if group_reactivos["EsTitulo"].any():
-            lot_name = group_reactivos[group_reactivos["EsTitulo"]==True]["Nombre producto"].iloc[0]
+            lot_name = group_reactivos[group_reactivos["EsTitulo"] == True]["Nombre producto"].iloc[0]
         else:
             lot_name = f"Ref. Saturno {group_id}"
         group_reactivos_reset = group_reactivos.reset_index()
@@ -658,47 +609,39 @@ if fped_new_str is not None:
         )
         st.markdown('</div>', unsafe_allow_html=True)
 
+# Guardar cambios
 if st.button("Guardar Cambios en Hoja Stock"):
-    # No forzamos a None la fecha pedida cuando hay fecha llegada
-    # (a menos que tu lógica lo exija; aquí lo evitamos para retener las horas exactas).
-    # Evitamos poner: if pd.notna(flleg_new_str): fped_new_str = None
-
+    # Reglas sencillas:
+    # Si se puso fecha Llegada o cambió lote => sumamos Uds. al stock actual
     if "Stock" in df_main.columns:
-        # Si el usuario modificó la fecha de llegada (o cambió el lote),
-        # sumamos uds_actual al stock_actual
-        if (
-            (flleg_new_str != fecha_llegada_actual and flleg_new_str is not None)
-            or
-            (lote_new != lote_actual and lote_new.strip() != "")
-        ):
+        if ((flleg_new_str != fecha_llegada_actual and flleg_new_str is not None)
+                or (lote_new != lote_actual and lote_new.strip() != "")):
             df_main.at[row_index, "Stock"] = stock_actual + uds_actual
-            st.info(f"Añadidas {uds_actual} uds => stock={stock_actual + uds_actual}")
+            st.info(f"Añadidas {uds_actual} uds => stock = {stock_actual + uds_actual}")
 
-    # Actualizar Lote, Caducidad, etc. en df_main
+    # Actualizar campos
     if "NºLote" in df_main.columns:
-        df_main.at[row_index, "NºLote"] = str(lote_new)
+        df_main.at[row_index, "NºLote"] = lote_new
     if "Caducidad" in df_main.columns:
-        df_main.at[row_index, "Caducidad"] = cad_new if pd.notna(cad_new) else pd.NaT
-
-    # Guardar fecha pedida como string
+        df_main.at[row_index, "Caducidad"] = cad_new if cad_new else pd.NaT
     if "Fecha Pedida" in df_main.columns:
         df_main.at[row_index, "Fecha Pedida"] = fped_new_str
-
-    # Guardar fecha llegada como string
     if "Fecha Llegada" in df_main.columns:
         df_main.at[row_index, "Fecha Llegada"] = flleg_new_str
-
     if "Sitio almacenaje" in df_main.columns:
-        df_main.at[row_index, "Sitio almacenaje"] = sitio_new
+        # Si no cambiamos nada, conservar valor. Sino:
+        # (aquí no se están mostrando inputs, podrías añadir un st.text_input)
+        # supondremos que no hemos tocado "sitio_almacenaje_actual"
+        df_main.at[row_index, "Sitio almacenaje"] = sitio_almacenaje_actual
 
     if "Comentario" not in df_main.columns:
         df_main["Comentario"] = ""
     df_main.at[row_index, "Comentario"] = comentario_nuevo
 
-    # Actualizamos "Fecha Pedida" para todos los reactivos seleccionados del grupo
-    if fped_new_str is not None:
+    # Actualizar fecha pedida en todos los reactivos del grupo
+    if fped_new_str:
         if not group_order_selected:
-            group_order_selected = options  # si el usuario no seleccionó nada, usamos todo
+            group_order_selected = options
         for label in group_order_selected:
             try:
                 i_val = int(label.split(" - ")[0])
@@ -706,66 +649,55 @@ if st.button("Guardar Cambios en Hoja Stock"):
             except Exception as e:
                 st.error(f"Error actualizando índice {label}: {e}")
 
-    # Guardamos df_main en st.session_state
+    # Guardar df_main en session_state
     st.session_state["data_dict"][sheet_name] = df_main
 
-    # Crear nueva versión A
-    new_file = crear_nueva_version_filename()
-    with pd.ExcelWriter(new_file, engine="openpyxl") as writer:
+    # Crear nueva versión en local (A)
+    new_file_a = crear_nueva_version_filename(VERSIONS_DIR, prefix="StockA")
+    with pd.ExcelWriter(new_file_a, engine="openpyxl") as writer:
         for sht, df_sht in st.session_state["data_dict"].items():
-            ocultar_cols = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID", "Alarma"]
+            ocultar_cols = ["ColorGroup","EsTitulo","GroupCount","MultiSort","NotTitulo","GroupID","Alarma"]
             tmp = df_sht.drop(columns=ocultar_cols, errors="ignore")
             tmp.to_excel(writer, sheet_name=sht, index=False)
 
-    # Sobrescribir STOCK_FILE
-    with pd.ExcelWriter(STOCK_FILE, engine="openpyxl") as writer:
-        for sht, df_sht in st.session_state["data_dict"].items():
-            ocultar_cols = ["ColorGroup", "EsTitulo", "GroupCount", "MultiSort", "NotTitulo", "GroupID", "Alarma"]
-            tmp = df_sht.drop(columns=ocultar_cols, errors="ignore")
-            tmp.to_excel(writer, sheet_name=sht, index=False)
+    st.success(f"✅ Cambios guardados en la nueva versión A: {new_file_a}")
 
-    # Insertar registro en B (misma hoja)
-    if sheet_name not in st.session_state["data_dict_b"]:
-        st.session_state["data_dict_b"][sheet_name] = pd.DataFrame()
+    # Registrar también en la base B
+    if "data_dict_b" in st.session_state:
+        if sheet_name not in st.session_state["data_dict_b"]:
+            st.session_state["data_dict_b"][sheet_name] = pd.DataFrame()
 
-    df_b_sh = st.session_state["data_dict_b"][sheet_name].copy()
-    nueva_fila = {
-        "Ref. Saturno": df_main.at[row_index, "Ref. Saturno"] if "Ref. Saturno" in df_main.columns else 0,
-        "Ref. Fisher": df_main.at[row_index, "Ref. Fisher"] if "Ref. Fisher" in df_main.columns else "",
-        "Nombre producto": df_main.at[row_index, "Nombre producto"] if "Nombre producto" in df_main.columns else "",
-        "NºLote": df_main.at[row_index, "NºLote"],
-        "Caducidad": df_main.at[row_index, "Caducidad"],
-        "Fecha Pedida": df_main.at[row_index, "Fecha Pedida"],
-        "Fecha Llegada": df_main.at[row_index, "Fecha Llegada"],
-        "Sitio almacenaje": df_main.at[row_index, "Sitio almacenaje"],
-        "Uds.": df_main.at[row_index, "Uds."] if "Uds." in df_main.columns else 0,
-        "Stock": df_main.at[row_index, "Stock"] if "Stock" in df_main.columns else 0,
-        "Comentario": df_main.at[row_index, "Comentario"] if "Comentario" in df_main.columns else "",
-        "Fecha Registro B": datetime.datetime.now()
-    }
-    df_b_sh = pd.concat([df_b_sh, pd.DataFrame([nueva_fila])], ignore_index=True)
-    st.session_state["data_dict_b"][sheet_name] = df_b_sh
+        df_b_sh = st.session_state["data_dict_b"][sheet_name].copy()
+        nueva_fila = {
+            "Ref. Saturno": df_main.at[row_index, "Ref. Saturno"] if "Ref. Saturno" in df_main.columns else 0,
+            "Ref. Fisher": df_main.at[row_index, "Ref. Fisher"] if "Ref. Fisher" in df_main.columns else "",
+            "Nombre producto": df_main.at[row_index, "Nombre producto"] if "Nombre producto" in df_main.columns else "",
+            "NºLote": df_main.at[row_index, "NºLote"],
+            "Caducidad": df_main.at[row_index, "Caducidad"],
+            "Fecha Pedida": df_main.at[row_index, "Fecha Pedida"],
+            "Fecha Llegada": df_main.at[row_index, "Fecha Llegada"],
+            "Sitio almacenaje": df_main.at[row_index, "Sitio almacenaje"],
+            "Uds.": df_main.at[row_index, "Uds."] if "Uds." in df_main.columns else 0,
+            "Stock": df_main.at[row_index, "Stock"] if "Stock" in df_main.columns else 0,
+            "Comentario": df_main.at[row_index, "Comentario"] if "Comentario" in df_main.columns else "",
+            "Fecha Registro B": datetime.datetime.now()
+        }
+        df_b_sh = pd.concat([df_b_sh, pd.DataFrame([nueva_fila])], ignore_index=True)
+        st.session_state["data_dict_b"][sheet_name] = df_b_sh
 
-    # Crear nueva versión B
-    new_file_b = crear_nueva_version_filename_b()
-    with pd.ExcelWriter(new_file_b, engine="openpyxl") as writerB:
-        for shtB, df_shtB in st.session_state["data_dict_b"].items():
-            df_shtB.to_excel(writerB, sheet_name=shtB, index=False)
+        new_file_b = crear_nueva_version_filename(VERSIONS_DIR_B, prefix="StockB")
+        with pd.ExcelWriter(new_file_b, engine="openpyxl") as writer_b:
+            for shtB, df_shtB in st.session_state["data_dict_b"].items():
+                df_shtB.to_excel(writer_b, sheet_name=shtB, index=False)
 
-    # Sobrescribir STOCK_FILE_B
-    with pd.ExcelWriter(STOCK_FILE_B, engine="openpyxl") as writerB:
-        for shtB, df_shtB in st.session_state["data_dict_b"].items():
-            df_shtB.to_excel(writerB, sheet_name=shtB, index=False)
+        st.success(f"✅ Registro agregado también en la base B => {new_file_b}")
 
-    st.success(
-        f"✅ Cambios guardados en '{new_file}' y '{STOCK_FILE}' (A). "
-        f"También en '{new_file_b}' y '{STOCK_FILE_B}' (B)."
-    )
+    # Descargar Excel A modificado (solo la hoja actual)
     excel_bytes = generar_excel_en_memoria(df_main, sheet_nm=sheet_name)
     st.download_button(
-        "Descargar Excel A modificado",
+        "Descargar Hoja A modificada",
         excel_bytes,
-        "Reporte_Stock.xlsx",
+        "Reporte_Stock_A.xlsx",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
@@ -777,7 +709,7 @@ st.divider()
 st.divider()
 
 # -------------------------------------------------------------------------
-# AGRUPAR EN TABS: Ver Base de Datos Historial (B), Filtrar Reactivos, e Informar Reactivo Agotado
+# Pestañas: Ver Base B, Filtrar Reactivos, Informar Reactivo Agotado
 # -------------------------------------------------------------------------
 tabs = st.tabs([
     "Ver Base de Datos Historial (B)",
@@ -785,6 +717,7 @@ tabs = st.tabs([
     "Informar Reactivo Agotado"
 ])
 
+# ---------------------- TAB 1: Ver Base B ----------------------
 with tabs[0]:
     st.write("### Vista de la Base de Datos Historial (B)")
     if st.session_state["data_dict_b"]:
@@ -792,8 +725,9 @@ with tabs[0]:
         hoja_b_sel = st.selectbox("Seleccione hoja en B (vista):", hojas_b, key="vista_tab")
         df_b_vista = st.session_state["data_dict_b"][hoja_b_sel].copy()
         if "Nombre producto" in df_b_vista.columns and "NºLote" in df_b_vista.columns:
-            df_b_vista.sort_values(by=["Nombre producto","NºLote"], inplace=True, ignore_index=True)
+            df_b_vista.sort_values(by=["Nombre producto", "NºLote"], inplace=True, ignore_index=True)
         st.dataframe(df_b_vista)
+
         excel_b_mem = generar_excel_en_memoria(df_b_vista, sheet_nm=hoja_b_sel)
         st.download_button(
             label="Descargar hoja de Excel B (vista)",
@@ -802,20 +736,21 @@ with tabs[0]:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
     else:
-        st.write("No hay datos en la Base Historial (B).")
+        st.warning("No hay datos en la Base B. Por favor, sube un archivo B o genera un registro.")
 
+# ---------------------- TAB 2: Filtrar Reactivos ----------------------
 with tabs[1]:
     st.write("### Filtrar Reactivos Limitantes/Compartidos")
+    if not st.session_state["data_dict_b"]:
+        st.warning("No hay datos en base B. Sube un archivo B en la barra lateral o registra cambios.")
+        st.stop()
 
+    # Lógica de reactivos “limitantes”
     limitantes_set = {
         "A42006","A42007","A27762","A34018","A33638","A33639","A27758","A27765","A4517",
         "A3410","A34537","A45617","A34540","A36410","A29025","A29027","A29026","A27754",
         "11754050","11766050"
     }
-
-    if not st.session_state["data_dict_b"]:
-        st.warning("No hay datos en base B. Verifica que Stock_Historico.xlsx tenga contenido.")
-        st.stop()
 
     all_rows_b = []
     for sheet_b, df_b_sht in st.session_state["data_dict_b"].items():
@@ -834,8 +769,6 @@ with tabs[1]:
         hoja = str(row.get("(Hoja B)", "")).strip()
 
         if not ref and not nom:
-            continue
-        if ref.upper() == "A":
             continue
 
         if ref in limitantes_set:
@@ -893,6 +826,7 @@ with tabs[1]:
 
         df_filtrado = df_b_combined[df_b_combined["Ref. Fisher"].astype(str).str.strip() == ref_sel].copy()
 
+        # Si quieres filtrar solo los que tengan Caducidad, por ejemplo:
         if "Caducidad" in df_filtrado.columns:
             df_filtrado = df_filtrado.dropna(subset=["Caducidad"])
 
@@ -901,11 +835,8 @@ with tabs[1]:
         else:
             if "Caducidad" in df_filtrado.columns:
                 df_filtrado.sort_values(by="Caducidad", inplace=True, ignore_index=True)
-
-            if ref_sel == "A27754":
-                st.info("Nota: Esta referencia se comparte entre OCA y FOCUS.")
-
             st.dataframe(df_filtrado)
+
             excel_filtro = generar_excel_en_memoria(df_filtrado, "Filtro_B")
             st.download_button(
                 label="Descargar resultados filtrados en Excel",
@@ -914,14 +845,15 @@ with tabs[1]:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
+# ---------------------- TAB 3: Informar Reactivo Agotado ----------------------
 with tabs[2]:
-    st.write("### Informar Reactivo Agotado")
+    st.write("### Informar Reactivo Agotado (Base A)")
     if not st.session_state["data_dict"]:
-        st.error("No se pudo cargar la base de datos (A).")
+        st.error("No se pudo cargar la base de datos A.")
         st.stop()
 
     hojas_a = list(st.session_state["data_dict"].keys())
-    hoja_sel = st.selectbox("Hoja A a consumir:", hojas_a, key="agotado_hoja")
+    hoja_sel = st.selectbox("Hoja A donde consumir stock:", hojas_a, key="agotado_hoja")
     df_a = st.session_state["data_dict"][hoja_sel].copy()
     df_a = enforce_types(df_a)
 
@@ -942,7 +874,7 @@ with tabs[2]:
     ]
 
     if df_cand.empty:
-        st.warning("No se encontró ese nombre en esta hoja A.")
+        st.warning("No se encontró ese nombre en la hoja A.")
     else:
         idx_c = df_cand.index[0]
         stock_c = df_a.at[idx_c, "Stock"] if "Stock" in df_a.columns else 0
@@ -951,6 +883,7 @@ with tabs[2]:
             nuevo_stock = max(0, stock_c - uds_consumir)
             df_a.at[idx_c, "Stock"] = nuevo_stock
             if nuevo_stock == 0:
+                # Vaciar campos
                 for col_vaciar in ["NºLote","Caducidad","Fecha Pedida","Fecha Llegada","Sitio almacenaje"]:
                     if col_vaciar in df_a.columns:
                         if col_vaciar in ["Caducidad","Fecha Pedida","Fecha Llegada"]:
@@ -961,40 +894,36 @@ with tabs[2]:
             st.warning(f"Consumidas {uds_consumir} uds. Stock final => {nuevo_stock}. (Sólo en memoria).")
 
     st.write("**Eliminar en B** => introduce el Lote exacto. Si coincide Nombre+Lote, se borra de B.")
-    lote_b = st.number_input("Nº de Lote (en B)", min_value=0, step=1, key="agotado_lote")
+    lote_b = st.text_input("Nº de Lote (en B)", value="", key="agotado_lote")
 
     if st.button("Guardar Cambios en Consumo Lab", key="agotado_guardar"):
-        new_file = crear_nueva_version_filename()
-        with pd.ExcelWriter(new_file, engine="openpyxl") as writer:
+        # Guardar nueva versión en A
+        new_file_a = crear_nueva_version_filename(VERSIONS_DIR, prefix="StockA")
+        with pd.ExcelWriter(new_file_a, engine="openpyxl") as writer:
             for sht, df_sht in st.session_state["data_dict"].items():
-                cols_int = ["ColorGroup","EsTitulo","GroupCount","MultiSort","NotTitulo","GroupID"]
+                cols_int = ["ColorGroup","EsTitulo","GroupCount","MultiSort","NotTitulo","GroupID","Alarma","nombre_ref"]
                 temp = df_sht.drop(columns=cols_int, errors="ignore")
                 temp.to_excel(writer, sheet_name=sht, index=False)
 
-        with pd.ExcelWriter(STOCK_FILE, engine="openpyxl") as writer:
-            for sht, df_sht in st.session_state["data_dict"].items():
-                cols_int = ["ColorGroup","EsTitulo","GroupCount","MultiSort","NotTitulo","GroupID"]
-                temp = df_sht.drop(columns=cols_int, errors="ignore")
-                temp.to_excel(writer, sheet_name=sht, index=False)
+        st.success(f"✅ Cambios de consumo guardados en nueva versión A => {new_file_a}")
 
+        # Actualizar la base B si coincide
         if hoja_sel in st.session_state["data_dict_b"]:
             df_b_hoja = st.session_state["data_dict_b"][hoja_sel].copy()
             if "Nombre producto" in df_b_hoja.columns and "NºLote" in df_b_hoja.columns:
+                # Borramos filas que coincidan con nombre_sel + lote_b
                 df_b_hoja = df_b_hoja[~(
                     (df_b_hoja["Nombre producto"] == nombre_sel) &
-                    (df_b_hoja["NºLote"] == str(lote_b))
+                    (df_b_hoja["NºLote"] == lote_b)
                 )]
                 st.session_state["data_dict_b"][hoja_sel] = df_b_hoja
 
-                new_file_b = crear_nueva_version_filename_b()
+                new_file_b = crear_nueva_version_filename(VERSIONS_DIR_B, prefix="StockB")
                 with pd.ExcelWriter(new_file_b, engine="openpyxl") as writer_b:
                     for sht_b, df_sht_b in st.session_state["data_dict_b"].items():
                         df_sht_b.to_excel(writer_b, sheet_name=sht_b, index=False)
 
-                with pd.ExcelWriter(STOCK_FILE_B, engine="openpyxl") as writer_b:
-                    for sht_b, df_sht_b in st.session_state["data_dict_b"].items():
-                        df_sht_b.to_excel(writer_b, sheet_name=sht_b, index=False)
+                st.success(f"✅ Se eliminó la fila en B si coincidía. Nueva versión => {new_file_b}")
 
-        st.success("✅ Cambios guardados en Hoja A y B (si coincidía).")
         time.sleep(2)
         st.rerun()
