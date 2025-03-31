@@ -1,5 +1,12 @@
 .streamlit/secrets.toml
 
+# Ignora todos los archivos Excel
+*.xlsx
+
+# Ignora las carpetas de versiones
+versions/
+versions_b/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
