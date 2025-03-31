@@ -71,6 +71,21 @@ os.makedirs(VERSIONS_DIR, exist_ok=True)
 os.makedirs(VERSIONS_DIR_B, exist_ok=True)
 
 # ---------------------------------------------------------------------------------
+# Inicialización de Session State
+# ---------------------------------------------------------------------------------
+if "data_dict" not in st.session_state:
+    st.session_state["data_dict"] = {}
+
+if "data_dict_b" not in st.session_state:
+    st.session_state["data_dict_b"] = {}
+
+# Banderas de control para evitar re-subida infinita
+if "processed_a" not in st.session_state:
+    st.session_state["processed_a"] = False
+if "processed_b" not in st.session_state:
+    st.session_state["processed_b"] = False
+
+# ---------------------------------------------------------------------------------
 # Funciones auxiliares
 # ---------------------------------------------------------------------------------
 def obtener_subcarpeta_versiones(base_dir: str) -> str:
@@ -109,17 +124,6 @@ def obtener_ultima_version(base_dir: str, exclude_pattern=None):
         ultima = max(archivos, key=os.path.getctime)
         return ultima
     return None
-
-# ---------------------------------------------------------------------------------
-# Inicialización de Session State
-# ---------------------------------------------------------------------------------
-# 'data_dict' => para la base A
-# 'data_dict_b' => para la base B (Histórico)
-if "data_dict" not in st.session_state:
-    st.session_state["data_dict"] = {}
-
-if "data_dict_b" not in st.session_state:
-    st.session_state["data_dict_b"] = {}
 
 # ---------------------------------------------------------------------------------
 # SideBar: subida/gestor de versiones para la base A
@@ -204,7 +208,11 @@ with st.sidebar.expander("Cargar / Explorar versiones (A)", expanded=False):
 
     # Subir archivo A manualmente
     archivo_subido_a = st.file_uploader("Subir archivo A (.xlsx)", type=["xlsx"], key="uploader_a")
-    if archivo_subido_a:
+
+    # Si hay archivo y todavía no lo hemos procesado en esta sesión
+    if archivo_subido_a and not st.session_state["processed_a"]:
+        st.session_state["processed_a"] = True
+
         nombre_archivo_subido = f"SubidoA_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.xlsx"
         ruta_sub = obtener_subcarpeta_versiones(VERSIONS_DIR)
         ruta_guardado = os.path.join(ruta_sub, nombre_archivo_subido)
@@ -216,9 +224,13 @@ with st.sidebar.expander("Cargar / Explorar versiones (A)", expanded=False):
             data_subida = pd.read_excel(ruta_guardado, sheet_name=None, engine="openpyxl")
             st.session_state["data_dict"] = data_subida
             st.success(f"✅ Archivo A '{nombre_archivo_subido}' importado correctamente.")
-            st.rerun()
+            st.experimental_rerun()
         except Exception as e:
             st.error(f"❌ Error al procesar el archivo A: {e}")
+
+# Tras la recarga, volvemos a poner la bandera en False
+if st.session_state["processed_a"]:
+    st.session_state["processed_a"] = False
 
 # ---------------------------------------------------------------------------------
 # SideBar: subida/gestor de versiones para la base B (Histórico)
@@ -302,7 +314,11 @@ with st.sidebar.expander("Cargar / Explorar versiones (B)", expanded=False):
 
     # Subir archivo B manualmente
     archivo_subido_b = st.file_uploader("Subir archivo B (.xlsx)", type=["xlsx"], key="uploader_b")
-    if archivo_subido_b:
+
+    # Si hay archivo y no está procesado aún
+    if archivo_subido_b and not st.session_state["processed_b"]:
+        st.session_state["processed_b"] = True
+
         nombre_archivo_subido_b = f"SubidoB_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.xlsx"
         ruta_sub_b = obtener_subcarpeta_versiones(VERSIONS_DIR_B)
         ruta_guardado_b = os.path.join(ruta_sub_b, nombre_archivo_subido_b)
@@ -314,10 +330,13 @@ with st.sidebar.expander("Cargar / Explorar versiones (B)", expanded=False):
             data_subida_b = pd.read_excel(ruta_guardado_b, sheet_name=None, engine="openpyxl")
             st.session_state["data_dict_b"] = data_subida_b
             st.success(f"✅ Archivo B '{nombre_archivo_subido_b}' importado correctamente.")
-            st.rerun()
+            st.experimental_rerun()
         except Exception as e:
             st.error(f"❌ Error al procesar el archivo B: {e}")
 
+# Tras la recarga, volvemos a poner la bandera en False
+if st.session_state["processed_b"]:
+    st.session_state["processed_b"] = False
 
 # ---------------------------------------------------------------------------------
 # Funciones de normalización
