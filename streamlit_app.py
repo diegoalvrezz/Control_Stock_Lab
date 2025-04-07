@@ -160,6 +160,10 @@ with st.sidebar.expander("Cargar / Explorar versiones (A)", expanded=False):
         if ultima_a:
             try:
                 data_a = pd.read_excel(ultima_a, sheet_name=None, engine="openpyxl")
+                for sheet, df in data_a.items():
+                    for col in df.select_dtypes(include=['object']).columns:
+                        df[col] = df[col].apply(lambda x: str(x) if not pd.isnull(x) else "")
+                    data_a[sheet] = df
                 st.session_state["data_dict"] = data_a
                 st.info(f"Se cargó automáticamente la última versión A: {ultima_a}")
             except Exception as e:
@@ -245,6 +249,10 @@ with st.sidebar.expander("Cargar / Explorar versiones (A)", expanded=False):
 
         try:
             data_subida = pd.read_excel(ruta_guardado, sheet_name=None, engine="openpyxl")
+            for sheet, df in data_subida.items():
+                for col in df.select_dtypes(include=['object']).columns:
+                    df[col] = df[col].apply(lambda x: str(x) if not pd.isnull(x) else "")
+                data_subida[sheet] = df
             st.session_state["data_dict"] = data_subida
             st.success(f"✅ Archivo A '{nombre_archivo_subido}' importado correctamente.")
             st.experimental_rerun()
@@ -266,6 +274,10 @@ with st.sidebar.expander("Cargar / Explorar versiones (B)", expanded=False):
         if ultima_b:
             try:
                 data_b = pd.read_excel(ultima_b, sheet_name=None, engine="openpyxl")
+                for sheet, df in data_b.items():
+                    for col in df.select_dtypes(include=['object']).columns:
+                        df[col] = df[col].apply(lambda x: str(x) if not pd.isnull(x) else "")
+                    data_b[sheet] = df
                 st.session_state["data_dict_b"] = data_b
                 st.info(f"Se cargó automáticamente la última versión B: {ultima_b}")
             except Exception as e:
@@ -351,6 +363,11 @@ with st.sidebar.expander("Cargar / Explorar versiones (B)", expanded=False):
 
         try:
             data_subida_b = pd.read_excel(ruta_guardado_b, sheet_name=None, engine="openpyxl")
+            data_subida_b = pd.read_excel(ultima_a, sheet_name=None, engine="openpyxl")
+            for sheet, df in data_a.items():
+                for col in df.select_dtypes(include=['object']).columns:
+                    df[col] = df[col].apply(lambda x: str(x) if not pd.isnull(x) else "")
+                data_subida_b[sheet] = df
             st.session_state["data_dict_b"] = data_subida_b
             st.success(f"✅ Archivo B '{nombre_archivo_subido_b}' importado correctamente.")
             st.experimental_rerun()
