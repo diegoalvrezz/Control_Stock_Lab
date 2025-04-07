@@ -19,7 +19,7 @@ import subprocess
 import os
 
 def resource_path(relative_path):
-    """Obtiene la ruta absoluta al recurso empaquetado."""
+    """ Obtiene la ruta absoluta al recurso cuando se ejecuta como .exe con PyInstaller """
     try:
         base_path = sys._MEIPASS
     except Exception:
