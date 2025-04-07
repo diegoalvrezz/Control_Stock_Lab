@@ -14,8 +14,24 @@ import glob
 import sys
 import subprocess
 
+import sys
+import subprocess
+import os
+
+def resource_path(relative_path):
+    """Obtiene la ruta absoluta al recurso empaquetado."""
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
 if __name__ == "__main__":
-    subprocess.call(["streamlit", "run", sys.argv[0]])
+    script_path = resource_path("streamlit_app.py")
+    subprocess.call(["streamlit", "run", script_path, "--server.headless", "false"])
+    sys.exit()
+
 # ---------------------------------------------------------------------------------
 # Ajustes Generales
 # ---------------------------------------------------------------------------------
