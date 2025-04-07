@@ -27,9 +27,7 @@ def resource_path(relative_path):
 
     return os.path.join(base_path, relative_path)
 
-if __name__ == "__main__" and not getattr(sys, 'frozen', False):
-    subprocess.call(["streamlit", "run", resource_path("streamlit_app.py"), "--server.headless", "false"])
-    sys.exit()
+
 
 # ---------------------------------------------------------------------------------
 # Ajustes Generales
