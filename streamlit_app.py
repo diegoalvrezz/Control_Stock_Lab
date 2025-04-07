@@ -11,7 +11,11 @@ import openpyxl
 import time
 import pytz
 import glob
+import sys
+import subprocess
 
+if __name__ == "__main__":
+    subprocess.call(["streamlit", "run", sys.argv[0]])
 # ---------------------------------------------------------------------------------
 # Ajustes Generales
 # ---------------------------------------------------------------------------------
