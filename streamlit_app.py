@@ -361,8 +361,8 @@ with st.sidebar.expander("Cargar / Explorar versiones (B)", expanded=False):
 
         try:
             data_subida_b = pd.read_excel(ruta_guardado_b, sheet_name=None, engine="openpyxl")
-            data_subida_b = pd.read_excel(ultima_a, sheet_name=None, engine="openpyxl")
-            for sheet, df in data_a.items():
+            
+            for sheet, df in data_subida_b.items():
                 for col in df.select_dtypes(include=['object']).columns:
                     df[col] = df[col].apply(lambda x: str(x) if not pd.isnull(x) else "")
                 data_subida_b[sheet] = df
