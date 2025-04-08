@@ -28,7 +28,6 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 
-
 # ---------------------------------------------------------------------------------
 # Ajustes Generales
 # ---------------------------------------------------------------------------------
@@ -62,7 +61,6 @@ authenticator = stauth.Authenticate(
     key=signature_key,
     cookie_expiry_days=1
 )
-
 
 
 # Inicialización segura
@@ -261,6 +259,7 @@ with st.sidebar.expander("Cargar / Explorar versiones (A)", expanded=False):
 if st.session_state["processed_a"]:
     st.session_state["processed_a"] = False
 
+
 # ---------------------------------------------------------------------------------
 # SideBar: subida/gestor de versiones para la base B (Histórico)
 # ---------------------------------------------------------------------------------
@@ -345,7 +344,7 @@ with st.sidebar.expander("Cargar / Explorar versiones (B)", expanded=False):
         else:
             st.error("Debes escribir 'ELIMINAR TODO' para confirmar.")
 
-    # Subir archivo B manualmente
+    # Subir archivo B manualmente (CORREGIDO)
     archivo_subido_b = st.file_uploader("Subir archivo B (.xlsx)", type=["xlsx"], key="uploader_b")
 
     # Si hay archivo y no está procesado aún
@@ -360,15 +359,20 @@ with st.sidebar.expander("Cargar / Explorar versiones (B)", expanded=False):
             shutil.copyfileobj(archivo_subido_b, out_file_b)
 
         try:
+            # Leemos EXCLUSIVAMENTE el archivo subido (B)
             data_subida_b = pd.read_excel(ruta_guardado_b, sheet_name=None, engine="openpyxl")
-            
+
+            # Convertir columnas 'object' en cadenas (evita problemas de np.nan)
             for sheet, df in data_subida_b.items():
                 for col in df.select_dtypes(include=['object']).columns:
                     df[col] = df[col].apply(lambda x: str(x) if not pd.isnull(x) else "")
                 data_subida_b[sheet] = df
+
+            # Guardamos en session_state para su uso
             st.session_state["data_dict_b"] = data_subida_b
             st.success(f"✅ Archivo B '{nombre_archivo_subido_b}' importado correctamente.")
             st.rerun()
+
         except Exception as e:
             st.error(f"❌ Error al procesar el archivo B: {e}")
 
@@ -414,7 +418,6 @@ if not st.session_state["data_dict_b"]:
 # ---------------------------------------------------------------------------------
 # A partir de aquí, la lógica principal de tu aplicación
 # ---------------------------------------------------------------------------------
-# Renombramos para simplificar
 data_dict = st.session_state["data_dict"]
 data_dict_b = st.session_state["data_dict_b"]
 
@@ -543,7 +546,6 @@ st.divider()
 # -------------------------------------------------------------------------
 st.header("Gestión del Stock (Base A)")
 
-# 1) Selección de hoja principal
 hojas_principales = list(data_dict.keys())
 sheet_name = st.selectbox("Seleccione el panel:", hojas_principales, key="main_sheet_sel")
 
@@ -568,7 +570,7 @@ df_main.drop(columns=cols_to_hide, inplace=True, errors="ignore")
 st.write(f"#### Stock del Panel: {sheet_name}")
 st.write(table_html, unsafe_allow_html=True)
 
-# 2) Selección de reactivo a modificar
+# Selección de reactivo a modificar
 if "Nombre producto" in df_main.columns and "Ref. Fisher" in df_main.columns:
     display_series = df_main.apply(lambda r: f"{r['Nombre producto']} ({r['Ref. Fisher']})", axis=1)
 else:
@@ -625,7 +627,6 @@ with colD:
 comentario_actual = str(get_val("Comentario", ""))
 comentario_nuevo = st.text_area("Comentario (opcional)", value=comentario_actual, key="comentario_input_key")
 
-# Fechas con zona horaria
 zone = pytz.timezone("Europe/Madrid")
 
 # Procesar Fecha Pedida
@@ -668,8 +669,7 @@ if fped_new_str:
 
 # Guardar cambios
 if st.button("Guardar Cambios en Hoja Stock"):
-    # Reglas sencillas:
-    # Si se puso fecha Llegada o cambió lote => sumamos Uds. al stock actual
+    # Reglas sencillas: si se puso fecha Llegada o cambió lote => sumamos Uds. al stock actual
     if "Stock" in df_main.columns:
         if ((flleg_new_str != fecha_llegada_actual and flleg_new_str is not None)
                 or (lote_new != lote_actual and lote_new.strip() != "")):
@@ -686,9 +686,6 @@ if st.button("Guardar Cambios en Hoja Stock"):
     if "Fecha Llegada" in df_main.columns:
         df_main.at[row_index, "Fecha Llegada"] = flleg_new_str
     if "Sitio almacenaje" in df_main.columns:
-        # Si no cambiamos nada, conservar valor. Sino:
-        # (aquí no se están mostrando inputs, podrías añadir un st.text_input)
-        # supondremos que no hemos tocado "sitio_almacenaje_actual"
         df_main.at[row_index, "Sitio almacenaje"] = sitio_almacenaje_actual
 
     if "Comentario" not in df_main.columns:
@@ -706,7 +703,6 @@ if st.button("Guardar Cambios en Hoja Stock"):
             except Exception as e:
                 st.error(f"Error actualizando índice {label}: {e}")
 
-    # Guardar df_main en session_state
     st.session_state["data_dict"][sheet_name] = df_main
 
     # Crear nueva versión en local (A)
@@ -749,7 +745,6 @@ if st.button("Guardar Cambios en Hoja Stock"):
 
         st.success(f"✅ Registro agregado también en la base B => {new_file_b}")
 
-    # Descargar Excel A modificado (solo la hoja actual)
     excel_bytes = generar_excel_en_memoria(df_main, sheet_nm=sheet_name)
     st.download_button(
         "Descargar Hoja A modificada",
@@ -760,7 +755,6 @@ if st.button("Guardar Cambios en Hoja Stock"):
 
     time.sleep(2)
     st.rerun()
-
 
 st.divider()
 st.divider()
@@ -802,7 +796,6 @@ with tabs[1]:
         st.warning("No hay datos en base B. Sube un archivo B en la barra lateral o registra cambios.")
         st.stop()
 
-    # Lógica de reactivos “limitantes”
     limitantes_set = {
         "A42006","A42007","A27762","A34018","A33638","A33639","A27758","A27765","A4517",
         "A3410","A34537","A45617","A34540","A36410","A29025","A29027","A29026","A27754",
@@ -883,7 +876,7 @@ with tabs[1]:
 
         df_filtrado = df_b_combined[df_b_combined["Ref. Fisher"].astype(str).str.strip() == ref_sel].copy()
 
-        # Si quieres filtrar solo los que tengan Caducidad, por ejemplo:
+        # Ejemplo de filtrar sólo si tienen Caducidad:
         if "Caducidad" in df_filtrado.columns:
             df_filtrado = df_filtrado.dropna(subset=["Caducidad"])
 
