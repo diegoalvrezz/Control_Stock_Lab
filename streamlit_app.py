@@ -253,7 +253,7 @@ with st.sidebar.expander("Cargar / Explorar versiones (A)", expanded=False):
                 data_subida[sheet] = df
             st.session_state["data_dict"] = data_subida
             st.success(f"✅ Archivo A '{nombre_archivo_subido}' importado correctamente.")
-            st.experimental_rerun()
+            st.rerun()
         except Exception as e:
             st.error(f"❌ Error al procesar el archivo A: {e}")
 
@@ -368,7 +368,7 @@ with st.sidebar.expander("Cargar / Explorar versiones (B)", expanded=False):
                 data_subida_b[sheet] = df
             st.session_state["data_dict_b"] = data_subida_b
             st.success(f"✅ Archivo B '{nombre_archivo_subido_b}' importado correctamente.")
-            st.experimental_rerun()
+            st.rerun()
         except Exception as e:
             st.error(f"❌ Error al procesar el archivo B: {e}")
 
