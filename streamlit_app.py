@@ -255,9 +255,7 @@ with st.sidebar.expander("Cargar / Explorar versiones (A)", expanded=False):
         except Exception as e:
             st.error(f"❌ Error al procesar el archivo A: {e}")
 
-# Tras la recarga, volvemos a poner la bandera en False
-if st.session_state["processed_a"]:
-    st.session_state["processed_a"] = False
+
 
 
 # ---------------------------------------------------------------------------------
@@ -377,8 +375,8 @@ with st.sidebar.expander("Cargar / Explorar versiones (B)", expanded=False):
             st.error(f"❌ Error al procesar el archivo B: {e}")
 
 # Tras la recarga, volvemos a poner la bandera en False
-if st.session_state["processed_b"]:
-    st.session_state["processed_b"] = False
+
+
 
 # ---------------------------------------------------------------------------------
 # Funciones de normalización
